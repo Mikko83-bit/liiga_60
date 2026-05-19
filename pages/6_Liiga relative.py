@@ -1,5 +1,6 @@
 # =========================================================
 # LIIGA RELATIVE IMPACT
+# FIXED VERSION
 # pages/6_Liiga_Relative.py
 # =========================================================
 
@@ -7,7 +8,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import os
 
 # ==================================================
 # PAGE CONFIG
@@ -36,7 +36,7 @@ def load_data():
     df = pd.read_excel(FILE)
 
     # ==========================================
-    # CLEAN COLUMNS
+    # CLEAN COLUMN NAMES
     # ==========================================
 
     df.columns = (
@@ -52,10 +52,10 @@ def load_data():
     )
 
     # ==========================================
-    # NUMERIC
+    # REQUIRED COLUMNS
     # ==========================================
 
-    numeric_cols = [
+    required_cols = [
 
         "Goals",
         "Assists",
@@ -68,29 +68,66 @@ def load_data():
         "NetxG",
         "Team_xG_when_on_ice",
         "Opponents_xG_when_on_ice",
-        "Time_on_ice",
-        "Games_played"
+        "Time_on_ice"
 
     ]
 
-    for col in numeric_cols:
+    for col in required_cols:
 
-        if col in df.columns:
-
-            df[col] = pd.to_numeric(
-                df[col],
-                errors="coerce"
-            ).fillna(0)
-
-        else:
-
+        if col not in df.columns:
             df[col] = 0
+
+        df[col] = pd.to_numeric(
+            df[col],
+            errors="coerce"
+        ).fillna(0)
+
+    # ==========================================
+    # GAMES
+    # ==========================================
+
+    if "Games_played" in df.columns:
+
+        df["Games"] = pd.to_numeric(
+            df["Games_played"],
+            errors="coerce"
+        ).fillna(0)
+
+    elif "Games" in df.columns:
+
+        df["Games"] = pd.to_numeric(
+            df["Games"],
+            errors="coerce"
+        ).fillna(0)
+
+    else:
+
+        df["Games"] = 0
 
     # ==========================================
     # TOI
     # ==========================================
 
-    df["TOI"] = df["Time_on_ice"]
+    df["TOI"] = pd.to_numeric(
+        df["Time_on_ice"],
+        errors="coerce"
+    ).fillna(0)
+
+    # ==========================================
+    # BASIC CLEAN
+    # ==========================================
+
+    df["Position"] = (
+        df["Position"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["Team"] = (
+        df["Team"]
+        .astype(str)
+        .str.strip()
+    )
 
     # ==========================================
     # PER60
@@ -112,21 +149,22 @@ def load_data():
     df["Breakouts60"] = per60("Breakouts")
     df["Takeaways60"] = per60("Takeaways")
 
-    # ==========================================
-    # ON-ICE xG
-    # ==========================================
+    # ==================================================
+    # IMPORTANT FIX
+    # ==================================================
+    # THESE ARE ALREADY RATE STATS
+    # DO NOT DIVIDE BY TOI AGAIN
+    # ==================================================
 
-    df["xGF60"] = np.where(
-        df["TOI"] > 0,
-        (df["Team_xG_when_on_ice"] / df["TOI"]) * 60,
-        0
-    )
+    df["xGF60"] = pd.to_numeric(
+        df["Team_xG_when_on_ice"],
+        errors="coerce"
+    ).fillna(0)
 
-    df["xGA60"] = np.where(
-        df["TOI"] > 0,
-        (df["Opponents_xG_when_on_ice"] / df["TOI"]) * 60,
-        0
-    )
+    df["xGA60"] = pd.to_numeric(
+        df["Opponents_xG_when_on_ice"],
+        errors="coerce"
+    ).fillna(0)
 
     # ==========================================
     # TEAM TABLE
@@ -188,7 +226,7 @@ def load_data():
     )
 
     # ==========================================
-    # TEAM ENVIRONMENT SCORE
+    # TEAM ENVIRONMENT
     # ==========================================
 
     team_df["Team_Environment"] = (
@@ -215,7 +253,7 @@ def load_data():
     ) * 100
 
     # ==========================================
-    # MERGE TEAM DATA
+    # MERGE
     # ==========================================
 
     df = df.merge(
@@ -225,7 +263,7 @@ def load_data():
     )
 
     # ==========================================
-    # RELATIVE METRICS
+    # TEAM AVERAGES
     # ==========================================
 
     team_avg_xGF = (
@@ -249,13 +287,15 @@ def load_data():
     )
 
     # ==========================================
-    # RELATIVE IMPACT
+    # RELATIVE METRICS
     # ==========================================
 
     df["Relative_xGF"] = (
         df["xGF60"] -
         team_avg_xGF
     )
+
+    # IMPORTANT FIX HERE TOO
 
     df["Relative_xGA"] = (
         team_avg_xGA -
@@ -273,7 +313,7 @@ def load_data():
     )
 
     # ==========================================
-    # IMPACT SCORE
+    # IMPACT MODEL
     # ==========================================
 
     df["Relative_Impact_Raw"] = (
@@ -304,9 +344,7 @@ def load_data():
 
     for metric in metrics:
 
-        percentile_col = f"{metric}_Pct"
-
-        df[percentile_col] = (
+        df[f"{metric}_Pct"] = (
 
             df.groupby("Position")[metric]
             .rank(pct=True) * 100
@@ -323,6 +361,10 @@ def load_data():
 
     return df
 
+
+# ==================================================
+# LOAD
+# ==================================================
 
 df = load_data()
 
@@ -346,23 +388,14 @@ min_games = st.sidebar.slider(
     5
 )
 
-# ==========================================
-# FILTERS
-# ==========================================
-
 filtered_df = df[
-    (df["TOI"] >= min_toi)
+    (df["TOI"] >= min_toi) &
+    (df["Games"] >= min_games)
 ]
 
-if "Games_played" in filtered_df.columns:
-
-    filtered_df = filtered_df[
-        filtered_df["Games_played"] >= min_games
-    ]
-
-# ==========================================
+# ==================================================
 # POSITION
-# ==========================================
+# ==================================================
 
 positions = sorted(
     filtered_df["Position"]
@@ -379,9 +412,9 @@ filtered_df = filtered_df[
     filtered_df["Position"] == selected_position
 ]
 
-# ==========================================
+# ==================================================
 # TEAM
-# ==========================================
+# ==================================================
 
 teams = sorted(
     filtered_df["Team"]
@@ -394,16 +427,16 @@ selected_team = st.sidebar.selectbox(
     teams
 )
 
-team_df = filtered_df[
+team_filtered = filtered_df[
     filtered_df["Team"] == selected_team
 ]
 
-# ==========================================
+# ==================================================
 # PLAYER
-# ==========================================
+# ==================================================
 
 players = sorted(
-    team_df["Player"]
+    team_filtered["Player"]
     .dropna()
     .unique()
 )
@@ -413,8 +446,8 @@ selected_player = st.sidebar.selectbox(
     players
 )
 
-player = team_df[
-    team_df["Player"] == selected_player
+player = team_filtered[
+    team_filtered["Player"] == selected_player
 ].iloc[0]
 
 # ==================================================
@@ -426,21 +459,22 @@ st.markdown(
 )
 
 # ==================================================
-# TEAM ENVIRONMENT
+# ENVIRONMENT
 # ==================================================
 
 env_score = player["Team_Environment"]
 
-env_label = "Strong Team"
+if env_score >= 75:
+    env_label = "Strong Team"
 
-if env_score < 45:
-    env_label = "Weak Team"
-
-elif env_score < 65:
+elif env_score >= 45:
     env_label = "Average Team"
 
+else:
+    env_label = "Weak Team"
+
 # ==================================================
-# TOP METRICS
+# TOP ROW
 # ==================================================
 
 c1, c2, c3 = st.columns(3)
@@ -456,7 +490,7 @@ with c2:
 
     st.metric(
         "Relative Impact",
-        f"{player['Relative_Impact_Raw_Pct']:.0f} %"
+        f"{player['Relative_Impact_Raw_Pct']:.0f}%"
     )
 
 with c3:
@@ -472,25 +506,35 @@ with c3:
 
 st.markdown("---")
 
-metric_cols = st.columns(4)
+m1, m2, m3, m4 = st.columns(4)
 
-metrics = [
+with m1:
 
-    ("Relative xGF", "Relative_xGF"),
-    ("Relative xGA", "Relative_xGA"),
-    ("Relative NetxG", "Relative_NetxG"),
-    ("Relative Offence", "Relative_Offence")
+    st.metric(
+        "Relative xGF",
+        f"{player['Relative_xGF']:.2f}"
+    )
 
-]
+with m2:
 
-for col, (label, stat) in zip(metric_cols, metrics):
+    st.metric(
+        "Relative xGA",
+        f"{player['Relative_xGA']:.2f}"
+    )
 
-    with col:
+with m3:
 
-        st.metric(
-            label,
-            f"{player[stat]:.2f}"
-        )
+    st.metric(
+        "Relative NetxG",
+        f"{player['Relative_NetxG']:.2f}"
+    )
+
+with m4:
+
+    st.metric(
+        "Relative Offence",
+        f"{player['Relative_Offence']:.2f}"
+    )
 
 # ==================================================
 # PERCENTILES
@@ -498,9 +542,9 @@ for col, (label, stat) in zip(metric_cols, metrics):
 
 st.markdown("## Relative Percentiles")
 
-percentile_cols = st.columns(5)
+cols = st.columns(5)
 
-pct_metrics = [
+gauges = [
 
     ("xGF", "Relative_xGF_Pct"),
     ("xGA", "Relative_xGA_Pct"),
@@ -510,7 +554,7 @@ pct_metrics = [
 
 ]
 
-for col, (label, stat) in zip(percentile_cols, pct_metrics):
+for col, (title, stat) in zip(cols, gauges):
 
     with col:
 
@@ -520,16 +564,16 @@ for col, (label, stat) in zip(percentile_cols, pct_metrics):
             mode="gauge+number",
             value=value,
             gauge={
-                "axis": {"range": [0,100]},
+                "axis": {"range": [0, 100]},
                 "bar": {"color": "#4F8BFF"},
                 "bgcolor": "#111111"
             },
-            title={"text": label}
+            title={"text": title}
         ))
 
         fig.update_layout(
             height=220,
-            margin=dict(l=10,r=10,t=40,b=10),
+            margin=dict(l=10, r=10, t=40, b=10),
             paper_bgcolor="#0E1117",
             font=dict(color="white")
         )
@@ -540,7 +584,7 @@ for col, (label, stat) in zip(percentile_cols, pct_metrics):
         )
 
 # ==================================================
-# TABLE
+# LEADERBOARD
 # ==================================================
 
 st.markdown("## Relative Leaderboard")
