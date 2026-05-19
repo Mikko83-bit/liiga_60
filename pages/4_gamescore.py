@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# PURE GAME SCORE MODEL
+# CLEAN FIXED VERSION
 # =========================================================
 
 import streamlit as st
@@ -37,22 +37,27 @@ FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 def clean_columns(df):
 
-    df.columns = (
+    cleaned = []
 
-        df.columns
+    for col in df.columns:
 
-        .str.strip()
+        col = str(col)
 
-        .str.replace(" ", "_")
-        .str.replace("/", "_")
-        .str.replace("%", "perc")
-        .str.replace("-", "_")
-        .str.replace("(", "", regex=False)
-        .str.replace(")", "", regex=False)
-        .str.replace(",", "", regex=False)
-        .str.replace(".", "", regex=False)
+        col = col.strip()
 
-    )
+        col = col.replace(" ", "_")
+        col = col.replace("/", "_")
+        col = col.replace("%", "perc")
+        col = col.replace("-", "_")
+        col = col.replace("(", "")
+        col = col.replace(")", "")
+        col = col.replace(",", "")
+        col = col.replace(".", "")
+        col = col.replace("'", "")
+
+        cleaned.append(col)
+
+    df.columns = cleaned
 
     return df
 
@@ -133,7 +138,17 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # NUMERIC
+    # TEAM
+    # =====================================================
+
+    df["Team"] = (
+        df["Team"]
+        .astype(str)
+        .str.strip()
+    )
+
+    # =====================================================
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -153,10 +168,12 @@ def load_data():
 
     for col in numeric_cols:
 
-        df[col] = pd.to_numeric(
-            df[col],
-            errors="coerce"
-        ).fillna(0)
+        if col in df.columns:
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            ).fillna(0)
 
     # =====================================================
     # TOI
@@ -362,7 +379,7 @@ def load_data():
     )
 
     # =====================================================
-    # STABILIZATION
+    # TOI STABILIZATION
     # =====================================================
 
     K = 400
