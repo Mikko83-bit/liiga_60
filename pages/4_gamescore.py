@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# FINAL CLEAN VERSION
+# TUNED VERSION
 # =========================================================
 
 import streamlit as st
@@ -148,7 +148,7 @@ def load_data():
     )
 
     # =====================================================
-    # NUMERIC COLUMNS
+    # NUMERIC
     # =====================================================
 
     numeric_cols = [
@@ -181,7 +181,7 @@ def load_data():
     df["TOI"] = df["Time_on_ice"]
 
     # =====================================================
-    # MINIMUM SAMPLE
+    # FILTER LOW SAMPLE
     # =====================================================
 
     df = df[
@@ -309,7 +309,7 @@ def load_data():
 
         -
 
-        1.75 * df.loc[forwards, "xGA60"]
+        0.75 * df.loc[forwards, "xGA60"]
 
     )
 
@@ -345,7 +345,7 @@ def load_data():
 
         -
 
-        2.3 * df.loc[defense, "xGA60"]
+        1.25 * df.loc[defense, "xGA60"]
 
     )
 
