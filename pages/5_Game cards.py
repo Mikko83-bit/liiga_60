@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA PLAYER COMPARISON CARDS
-# SIDEBAR FILTER VERSION
+# FULL FILTER VERSION
 # =========================================================
 
 import streamlit as st
@@ -18,16 +18,16 @@ st.set_page_config(
 )
 
 # =========================================================
-# FILE
-# =========================================================
-
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
-
-# =========================================================
 # TITLE
 # =========================================================
 
 st.title("🏒 Liiga Skill Comparison")
+
+# =========================================================
+# FILE
+# =========================================================
+
+FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 # =========================================================
 # CLEAN COLUMNS
@@ -106,7 +106,7 @@ def get_color(value):
         return "#efb1b1"
 
 # =========================================================
-# SKILL CARD
+# CARD
 # =========================================================
 
 def skill_card(skill, value):
@@ -175,12 +175,50 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # NUMERIC
+    # DEBUG COLUMN NAMES
+    # =====================================================
+
+    # st.write(df.columns.tolist())
+
+    # =====================================================
+    # FIND GAMES COLUMN
+    # =====================================================
+
+    games_col = None
+
+    possible_games_cols = [
+
+        "Games",
+        "GP",
+        "Games_played",
+        "GP_total"
+
+    ]
+
+    for col in possible_games_cols:
+
+        if col in df.columns:
+
+            games_col = col
+            break
+
+    if games_col is None:
+
+        df["Games"] = 0
+
+    else:
+
+        df["Games"] = pd.to_numeric(
+            df[games_col],
+            errors="coerce"
+        ).fillna(0)
+
+    # =====================================================
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
 
-        "Games",
         "Goals",
         "Assists",
         "First_assist",
@@ -210,6 +248,10 @@ def load_data():
                 errors="coerce"
             ).fillna(0)
 
+        else:
+
+            df[col] = 0
+
     # =====================================================
     # TOI
     # =====================================================
@@ -222,50 +264,37 @@ def load_data():
 
     def per60(stat):
 
-        return (
-            df[stat]
-            /
-            df["TOI"]
-        ) * 60
+        return np.where(
+            df["TOI"] > 0,
+            (df[stat] / df["TOI"]) * 60,
+            0
+        )
 
     df["Goals60"] = per60("Goals")
-
     df["Assists60"] = per60("Assists")
-
     df["Shots60"] = per60("Shots")
-
     df["Entries60"] = per60("Entries")
-
     df["Breakouts60"] = per60("Breakouts")
-
     df["Takeaways60"] = per60("Takeaways")
 
     # =====================================================
     # xG
     # =====================================================
 
-    df["xGF60"] = (
+    df["xGF60"] = np.where(
+        df["TOI"] > 0,
+        (df["Team_xG_when_on_ice"] / df["TOI"]) * 60,
+        0
+    )
 
-        df["Team_xG_when_on_ice"]
-
-        /
-
-        df["TOI"]
-
-    ) * 60
-
-    df["xGA60"] = (
-
-        df["Opponents_xG_when_on_ice"]
-
-        /
-
-        df["TOI"]
-
-    ) * 60
+    df["xGA60"] = np.where(
+        df["TOI"] > 0,
+        (df["Opponents_xG_when_on_ice"] / df["TOI"]) * 60,
+        0
+    )
 
     # =====================================================
-    # RAW SCORES
+    # SKILL RAW SCORES
     # =====================================================
 
     df["ShootingRaw"] = (
@@ -370,7 +399,7 @@ def load_data():
         )
 
     # =====================================================
-    # OVERALL
+    # OVERALL SCORE
     # =====================================================
 
     forwards = df["Position"] == "F"
@@ -430,10 +459,14 @@ def load_data():
 df = load_data()
 
 # =========================================================
-# SIDEBAR FILTERS
+# SIDEBAR
 # =========================================================
 
 st.sidebar.header("Filters")
+
+# =========================================================
+# MINIMUM TOI
+# =========================================================
 
 min_toi = st.sidebar.slider(
     "Minimum TOI",
@@ -442,12 +475,20 @@ min_toi = st.sidebar.slider(
     200
 )
 
+# =========================================================
+# MINIMUM GAMES
+# =========================================================
+
 min_games = st.sidebar.slider(
     "Minimum Games",
     0,
     60,
     5
 )
+
+# =========================================================
+# POSITION
+# =========================================================
 
 position_filter = st.sidebar.selectbox(
     "Position",
@@ -478,7 +519,9 @@ if position_filter != "All":
 # TEAM FILTERS
 # =========================================================
 
-teams = sorted(filtered_df["Team"].unique())
+teams = sorted(
+    filtered_df["Team"].dropna().unique()
+)
 
 team1 = st.sidebar.selectbox(
     "Team 1",
@@ -548,7 +591,7 @@ with h3:
 """)
 
 # =========================================================
-# SKILL COMPARISON
+# SKILLS
 # =========================================================
 
 st.markdown("## Skill Comparison")
