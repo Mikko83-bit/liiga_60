@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA PLAYER COMPARISON CARDS
-# HOCKEY STAT CARD STYLE
+# FIXED VERSION
 # =========================================================
 
 import streamlit as st
@@ -12,7 +12,7 @@ import numpy as np
 # =========================================================
 
 st.set_page_config(
-    page_title="Liiga Player Comparison",
+    page_title="Liiga Skill Comparison",
     page_icon="🏒",
     layout="wide"
 )
@@ -70,7 +70,7 @@ def percentile_score(series):
     )
 
 # =========================================================
-# SKILL LABEL
+# LABELS
 # =========================================================
 
 def get_label(value):
@@ -91,7 +91,7 @@ def get_label(value):
         return "BELOW AVG"
 
 # =========================================================
-# BAR COLOR
+# COLORS
 # =========================================================
 
 def get_color(value):
@@ -115,27 +115,27 @@ def skill_box(skill, value):
 
     label = get_label(value)
 
-    st.markdown(f"""
+    html = f"""
 
     <div style="
         background-color:{color};
         padding:18px;
-        border-radius:8px;
-        margin-bottom:24px;
+        border-radius:10px;
+        margin-bottom:22px;
         text-align:center;
         color:black;
         font-weight:bold;
     ">
 
         <div style="
-            font-size:14px;
-            margin-bottom:2px;
+            font-size:16px;
+            margin-bottom:4px;
         ">
             {skill}
         </div>
 
         <div style="
-            font-size:48px;
+            font-size:52px;
             line-height:1;
         ">
             {int(value)}
@@ -144,13 +144,19 @@ def skill_box(skill, value):
         <div style="
             font-size:13px;
             letter-spacing:1px;
+            margin-top:4px;
         ">
             {label}
         </div>
 
     </div>
 
-    """, unsafe_allow_html=True)
+    """
+
+    st.markdown(
+        html,
+        unsafe_allow_html=True
+    )
 
 # =========================================================
 # LOAD DATA
@@ -167,7 +173,7 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # NUMERIC
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -205,6 +211,10 @@ def load_data():
     # =====================================================
 
     df["TOI"] = df["Time_on_ice"]
+
+    # =====================================================
+    # MINIMUM SAMPLE
+    # =====================================================
 
     df = df[
         df["TOI"] >= 300
@@ -351,7 +361,7 @@ def load_data():
     )
 
     # =====================================================
-    # PERCENTILES
+    # PERCENTILE SCORES
     # =====================================================
 
     categories = [
@@ -374,7 +384,7 @@ def load_data():
         )
 
     # =====================================================
-    # OVERALL
+    # OVERALL SCORE
     # =====================================================
 
     forwards = df["Position"] == "F"
@@ -428,7 +438,7 @@ def load_data():
     return df
 
 # =========================================================
-# LOAD
+# LOAD DATA
 # =========================================================
 
 df = load_data()
@@ -472,21 +482,21 @@ c1, c2, c3 = st.columns([4,1,4])
 with c1:
 
     st.markdown(f"""
-    # {player1['Player']}
+    ## {player1['Player']}
 
-    ### {player1['Team']} | {player1['Position']}
+    {player1['Team']} | {player1['Position']}
     """)
 
 with c2:
 
-    st.markdown("# VS")
+    st.markdown("## VS")
 
 with c3:
 
     st.markdown(f"""
-    # {player2['Player']}
+    ## {player2['Player']}
 
-    ### {player2['Team']} | {player2['Position']}
+    {player2['Team']} | {player2['Position']}
     """)
 
 # =========================================================
