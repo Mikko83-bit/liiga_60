@@ -12,7 +12,7 @@ import numpy as np
 # =========================================================
 
 st.set_page_config(
-    page_title="Liiga Skill Comparison",
+    page_title="Liiga Cards Comparison",
     page_icon="🏒",
     layout="wide"
 )
@@ -21,7 +21,7 @@ st.set_page_config(
 # TITLE
 # =========================================================
 
-st.title("🏒 Liiga Skill Comparison")
+st.title("🏒 Liiga Cards Comparison")
 
 # =========================================================
 # FILE
