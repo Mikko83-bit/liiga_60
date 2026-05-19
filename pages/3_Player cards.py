@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA STAT CARDS
-# NORMALIZED RATING ENGINE
+# STABILIZED + POSITION NORMALIZED ENGINE
 # =========================================================
 
 import streamlit as st
@@ -94,9 +94,8 @@ def clean_columns(df):
 
     return df
 
-
 # =========================================================
-# Z SCORE
+# Z-SCORE
 # =========================================================
 
 def zscore(series):
@@ -106,11 +105,12 @@ def zscore(series):
     if std == 0:
         return pd.Series(0, index=series.index)
 
-    return (
-        (series - series.mean())
-        / std
-    )
+    z = (series - series.mean()) / std
 
+    # CLIP OUTLIERS
+    z = z.clip(-3, 3)
+
+    return z
 
 # =========================================================
 # PERCENTILE
@@ -122,7 +122,6 @@ def pct(series, value):
         series,
         value
     )
-
 
 # =========================================================
 # GAUGE
@@ -137,8 +136,7 @@ def make_gauge(title, value, color):
         value=value,
 
         number={
-            "suffix": "",
-            "font": {"size": 42}
+            "font": {"size": 40}
         },
 
         title={
@@ -176,7 +174,6 @@ def make_gauge(title, value, color):
 
     return fig
 
-
 # =========================================================
 # LOAD DATA
 # =========================================================
@@ -202,7 +199,7 @@ def load_data():
     )
 
     # =====================================================
-    # NUMERIC COLUMNS
+    # NUMERIC
     # =====================================================
 
     numeric_cols = [
@@ -236,7 +233,13 @@ def load_data():
 
     players["TOI"] = players["Time_on_ice"]
 
-    players["TOI"] = players["TOI"].replace(0, np.nan)
+    # =====================================================
+    # MINIMUM TOI FILTER
+    # =====================================================
+
+    players = players[
+        players["TOI"] >= 300
+    ].copy()
 
     # =====================================================
     # PER 60
@@ -280,7 +283,7 @@ def load_data():
     players = players.fillna(0)
 
     # =====================================================
-    # Z-SCORES
+    # POSITION-SPECIFIC NORMALIZATION
     # =====================================================
 
     z_cols = [
@@ -300,11 +303,15 @@ def load_data():
 
     ]
 
-    for col in z_cols:
+    for position in ["F", "D"]:
 
-        players[f"{col}_z"] = zscore(
-            players[col]
-        )
+        mask = players["Position"] == position
+
+        for col in z_cols:
+
+            players.loc[mask, f"{col}_z"] = zscore(
+                players.loc[mask, col]
+            )
 
     # =====================================================
     # OFFENSE
@@ -400,8 +407,43 @@ def load_data():
 
     )
 
-    return players
+    # =====================================================
+    # TOI STABILIZATION
+    # =====================================================
 
+    K = 400
+
+    players["TOI_Factor"] = (
+
+        players["TOI"]
+
+        /
+
+        (
+            players["TOI"] + K
+        )
+
+    )
+
+    rating_cols = [
+
+        "OffenseRating",
+        "DefenseRating",
+        "TransitionRating",
+        "PossessionRating",
+        "OverallRating"
+
+    ]
+
+    for col in rating_cols:
+
+        players[col] = (
+            players[col]
+            *
+            players["TOI_Factor"]
+        )
+
+    return players
 
 # =========================================================
 # LOAD
@@ -445,7 +487,7 @@ if position_filter != "All":
     ]
 
 # =========================================================
-# TOP PLAYERS
+# TOP TABLE
 # =========================================================
 
 st.subheader("Top Overall Ratings")
@@ -482,10 +524,6 @@ st.dataframe(
 st.divider()
 
 st.header("Player Stat Card")
-
-# =========================================================
-# TEAM FILTER
-# =========================================================
 
 card_team = st.selectbox(
     "Choose Team",
@@ -594,7 +632,7 @@ with g4:
     )
 
 # =========================================================
-# PLAYER STATS
+# PLAYER METRICS
 # =========================================================
 
 st.subheader("Player Metrics")
