@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA RELATIVE IMPACT
-# FIXED VERSION
+# FIXED xGA VERSION
 # pages/6_Liiga_Relative.py
 # =========================================================
 
@@ -35,9 +35,9 @@ def load_data():
 
     df = pd.read_excel(FILE)
 
-    # ==========================================
-    # CLEAN COLUMN NAMES
-    # ==========================================
+    # ==================================================
+    # CLEAN COLUMNS
+    # ==================================================
 
     df.columns = (
         df.columns
@@ -51,9 +51,9 @@ def load_data():
         .str.replace(".", "", regex=False)
     )
 
-    # ==========================================
+    # ==================================================
     # REQUIRED COLUMNS
-    # ==========================================
+    # ==================================================
 
     required_cols = [
 
@@ -82,9 +82,9 @@ def load_data():
             errors="coerce"
         ).fillna(0)
 
-    # ==========================================
+    # ==================================================
     # GAMES
-    # ==========================================
+    # ==================================================
 
     if "Games_played" in df.columns:
 
@@ -104,18 +104,18 @@ def load_data():
 
         df["Games"] = 0
 
-    # ==========================================
+    # ==================================================
     # TOI
-    # ==========================================
+    # ==================================================
 
     df["TOI"] = pd.to_numeric(
         df["Time_on_ice"],
         errors="coerce"
     ).fillna(0)
 
-    # ==========================================
+    # ==================================================
     # BASIC CLEAN
-    # ==========================================
+    # ==================================================
 
     df["Position"] = (
         df["Position"]
@@ -129,17 +129,21 @@ def load_data():
         .str.strip()
     )
 
-    # ==========================================
-    # PER60
-    # ==========================================
+    # ==================================================
+    # PER60 FUNCTION
+    # ==================================================
 
     def per60(stat):
 
         return np.where(
             df["TOI"] > 0,
-            (df[stat] / df["TOI"]) * 60,
+            df[stat] / (df["TOI"] / 60),
             0
         )
+
+    # ==================================================
+    # BASIC PER60
+    # ==================================================
 
     df["Goals60"] = per60("Goals")
     df["Assists60"] = per60("Assists")
@@ -148,27 +152,29 @@ def load_data():
     df["Entries60"] = per60("Entries")
     df["Breakouts60"] = per60("Breakouts")
     df["Takeaways60"] = per60("Takeaways")
+    df["PuckLosses60"] = per60("Puck_losses")
 
     # ==================================================
     # IMPORTANT FIX
+    # xGF / xGA ARE TOTALS
+    # CONVERT TO PER60 CORRECTLY
     # ==================================================
-    # THESE ARE ALREADY RATE STATS
-    # DO NOT DIVIDE BY TOI AGAIN
+
+    df["xGF60"] = np.where(
+        df["TOI"] > 0,
+        df["Team_xG_when_on_ice"] / (df["TOI"] / 60),
+        0
+    )
+
+    df["xGA60"] = np.where(
+        df["TOI"] > 0,
+        df["Opponents_xG_when_on_ice"] / (df["TOI"] / 60),
+        0
+    )
+
     # ==================================================
-
-    df["xGF60"] = pd.to_numeric(
-        df["Team_xG_when_on_ice"],
-        errors="coerce"
-    ).fillna(0)
-
-    df["xGA60"] = pd.to_numeric(
-        df["Opponents_xG_when_on_ice"],
-        errors="coerce"
-    ).fillna(0)
-
-    # ==========================================
-    # TEAM TABLE
-    # ==========================================
+    # TEAM DATA
+    # ==================================================
 
     team_data = {
 
@@ -204,16 +210,12 @@ def load_data():
 
     team_df = pd.DataFrame(team_data)
 
-    # ==========================================
-    # TEAM METRICS
-    # ==========================================
+    # ==================================================
+    # TEAM ENVIRONMENT
+    # ==================================================
 
     team_df["GF_per_Game"] = (
         team_df["Goals_for"] / 60
-    )
-
-    team_df["GA_per_Game"] = (
-        team_df["Goals_against"] / 60
     )
 
     team_df["Goal_Diff"] = (
@@ -224,10 +226,6 @@ def load_data():
     team_df["Points_perc"] = (
         team_df["Points"] / 120
     )
-
-    # ==========================================
-    # TEAM ENVIRONMENT
-    # ==========================================
 
     team_df["Team_Environment"] = (
 
@@ -252,9 +250,9 @@ def load_data():
 
     ) * 100
 
-    # ==========================================
+    # ==================================================
     # MERGE
-    # ==========================================
+    # ==================================================
 
     df = df.merge(
         team_df,
@@ -262,9 +260,9 @@ def load_data():
         how="left"
     )
 
-    # ==========================================
+    # ==================================================
     # TEAM AVERAGES
-    # ==========================================
+    # ==================================================
 
     team_avg_xGF = (
         df.groupby("Team")["xGF60"]
@@ -286,16 +284,16 @@ def load_data():
         .transform("mean")
     )
 
-    # ==========================================
+    # ==================================================
     # RELATIVE METRICS
-    # ==========================================
+    # ==================================================
 
     df["Relative_xGF"] = (
         df["xGF60"] -
         team_avg_xGF
     )
 
-    # IMPORTANT FIX HERE TOO
+    # LOWER xGA IS BETTER
 
     df["Relative_xGA"] = (
         team_avg_xGA -
@@ -312,9 +310,9 @@ def load_data():
         team_avg_goals
     )
 
-    # ==========================================
+    # ==================================================
     # IMPACT MODEL
-    # ==========================================
+    # ==================================================
 
     df["Relative_Impact_Raw"] = (
 
@@ -328,9 +326,9 @@ def load_data():
 
     )
 
-    # ==========================================
+    # ==================================================
     # POSITION PERCENTILES
-    # ==========================================
+    # ==================================================
 
     metrics = [
 
@@ -351,13 +349,18 @@ def load_data():
 
         )
 
-    # ==========================================
+    # ==================================================
     # ROUND
-    # ==========================================
+    # ==================================================
 
-    numeric = df.select_dtypes(include=np.number).columns
+    numeric_cols = df.select_dtypes(
+        include=np.number
+    ).columns
 
-    df[numeric] = df[numeric].round(2)
+    df[numeric_cols] = (
+        df[numeric_cols]
+        .round(2)
+    )
 
     return df
 
@@ -459,7 +462,7 @@ st.markdown(
 )
 
 # ==================================================
-# ENVIRONMENT
+# TEAM ENVIRONMENT
 # ==================================================
 
 env_score = player["Team_Environment"]
@@ -474,7 +477,7 @@ else:
     env_label = "Weak Team"
 
 # ==================================================
-# TOP ROW
+# TOP METRICS
 # ==================================================
 
 c1, c2, c3 = st.columns(3)
@@ -542,7 +545,7 @@ with m4:
 
 st.markdown("## Relative Percentiles")
 
-cols = st.columns(5)
+gauge_cols = st.columns(5)
 
 gauges = [
 
@@ -554,7 +557,7 @@ gauges = [
 
 ]
 
-for col, (title, stat) in zip(cols, gauges):
+for col, (title, stat) in zip(gauge_cols, gauges):
 
     with col:
 
@@ -566,14 +569,19 @@ for col, (title, stat) in zip(cols, gauges):
             gauge={
                 "axis": {"range": [0, 100]},
                 "bar": {"color": "#4F8BFF"},
-                "bgcolor": "#111111"
-            },
+                "bgcolor": "#111111"}
+            ,
             title={"text": title}
         ))
 
         fig.update_layout(
             height=220,
-            margin=dict(l=10, r=10, t=40, b=10),
+            margin=dict(
+                l=10,
+                r=10,
+                t=40,
+                b=10
+            ),
             paper_bgcolor="#0E1117",
             font=dict(color="white")
         )
