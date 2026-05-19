@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# FINAL FIXED VERSION
+# FINAL CORRECTED VERSION
 # =========================================================
 
 import streamlit as st
@@ -85,12 +85,12 @@ def make_gauge(title, value, color):
         value=value,
 
         number={
-            "font": {"size": 40}
+            "font": {"size": 42}
         },
 
         title={
             "text": title,
-            "font": {"size": 24}
+            "font": {"size": 26}
         },
 
         gauge={
@@ -116,7 +116,7 @@ def make_gauge(title, value, color):
     ))
 
     fig.update_layout(
-        height=280,
+        height=300,
         paper_bgcolor="#0b1020",
         font={"color": "white"}
     )
@@ -138,7 +138,7 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # TEAM
+    # TEAM CLEAN
     # =====================================================
 
     df["Team"] = (
@@ -182,7 +182,7 @@ def load_data():
     df["TOI"] = df["Time_on_ice"]
 
     # =====================================================
-    # MINIMUM TOI
+    # FILTER LOW SAMPLE
     # =====================================================
 
     df = df[
@@ -194,21 +194,15 @@ def load_data():
     # =====================================================
 
     df["Goals60"] = (
-        df["Goals"]
-        /
-        df["TOI"]
+        df["Goals"] / df["TOI"]
     ) * 60
 
     df["Assists60"] = (
-        df["Assists"]
-        /
-        df["TOI"]
+        df["Assists"] / df["TOI"]
     ) * 60
 
     df["Shots60"] = (
-        df["Shots"]
-        /
-        df["TOI"]
+        df["Shots"] / df["TOI"]
     ) * 60
 
     # =====================================================
@@ -253,9 +247,11 @@ def load_data():
     # CORSI DIFFERENTIAL
     # =====================================================
 
+    # DATA IS 0.55 = 55%
+
     df["CorsiDiff"] = (
 
-        df["CORSI_for_perc"]
+        (df["CORSI_for_perc"] * 100)
 
         -
 
@@ -522,7 +518,7 @@ gs_pct = pct(
 )
 
 # =========================================================
-# HEADER
+# PLAYER HEADER
 # =========================================================
 
 st.subheader(
