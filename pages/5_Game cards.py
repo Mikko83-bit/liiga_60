@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA PLAYER COMPARISON
-# FINAL CLEAN VERSION WITH LOGOS
+# FINAL VERSION WITH WORKING LOGOS
 # =========================================================
 
 import streamlit as st
@@ -9,7 +9,7 @@ import numpy as np
 import os
 
 # =========================================================
-# PAGE
+# PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
@@ -37,46 +37,52 @@ html, body, [class*="css"]  {
 }
 
 /* Sidebar */
+
 section[data-testid="stSidebar"]{
     background-color:#111827;
 }
 
-/* Main Title */
+/* Main title */
+
 .main-title{
-    font-size:54px;
+    font-size:56px;
     font-weight:900;
-    margin-bottom:10px;
+    margin-bottom:25px;
 }
 
-/* Player Name */
+/* Player name */
+
 .player-name{
-    font-size:36px;
+    font-size:38px;
     font-weight:800;
     margin-top:5px;
 }
 
-/* Player Subtitle */
+/* Player subtitle */
+
 .player-sub{
     font-size:20px;
     color:#d1d5db;
-    margin-bottom:15px;
+    margin-bottom:10px;
 }
 
-/* Skill Title */
+/* Skill title */
+
 .skill-title{
-    font-size:38px;
+    font-size:36px;
     font-weight:900;
     margin-top:20px;
     margin-bottom:20px;
 }
 
-/* Skill Card */
+/* Skill cards */
+
 .skill-card{
     border-radius:12px;
     padding:16px;
     text-align:center;
     margin-bottom:18px;
-    height:115px;
+    height:110px;
     display:flex;
     flex-direction:column;
     justify-content:center;
@@ -139,7 +145,7 @@ def percentile(series):
     return series.rank(pct=True) * 100
 
 # =========================================================
-# LABELS
+# LABEL
 # =========================================================
 
 def get_label(value):
@@ -159,7 +165,7 @@ def get_label(value):
     return "BELOW AVG"
 
 # =========================================================
-# COLORS
+# COLOR
 # =========================================================
 
 def get_color(value):
@@ -178,7 +184,7 @@ def get_color(value):
 
 def get_logo(team):
 
-    path = f"../logos/{team}.png"
+    path = os.path.join("logos", f"{team}.png")
 
     if os.path.exists(path):
 
@@ -207,7 +213,7 @@ color:black;
 <div style="
 font-size:16px;
 font-weight:700;
-margin-bottom:4px;
+margin-bottom:5px;
 ">
 {skill}
 </div>
@@ -342,7 +348,7 @@ def load_data():
     df["Takeaways60"] = per60("Takeaways")
 
     # =====================================================
-    # xG
+    # XG
     # =====================================================
 
     df["xGF60"] = np.where(
@@ -465,7 +471,7 @@ def load_data():
     return df
 
 # =========================================================
-# LOAD
+# LOAD DATA
 # =========================================================
 
 df = load_data()
@@ -516,7 +522,7 @@ if position_filter != "All":
     ]
 
 # =========================================================
-# TEAMS
+# TEAM FILTERS
 # =========================================================
 
 teams = sorted(
@@ -535,7 +541,7 @@ team2 = st.sidebar.selectbox(
 )
 
 # =========================================================
-# PLAYERS
+# PLAYER FILTERS
 # =========================================================
 
 team1_df = filtered_df[
@@ -583,7 +589,7 @@ with c1:
 
         st.image(
             logo1,
-            width=95
+            width=90
         )
 
     st.markdown(
@@ -603,10 +609,10 @@ with c2:
 
     st.markdown("""
 <div style="
-font-size:60px;
+font-size:64px;
 font-weight:900;
 text-align:center;
-margin-top:80px;
+margin-top:85px;
 ">
 VS
 </div>
@@ -618,7 +624,7 @@ with c3:
 
         st.image(
             logo2,
-            width=95
+            width=90
         )
 
     st.markdown(
