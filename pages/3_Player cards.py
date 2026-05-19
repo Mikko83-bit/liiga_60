@@ -1,13 +1,12 @@
 # =========================================================
 # LIIGA STAT CARDS
-# STABILIZED + POSITION NORMALIZED ENGINE
+# CLEAN STABILIZED VERSION
 # =========================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from scipy.stats import percentileofscore
 
 # =========================================================
@@ -95,7 +94,7 @@ def clean_columns(df):
     return df
 
 # =========================================================
-# Z-SCORE
+# Z SCORE
 # =========================================================
 
 def zscore(series):
@@ -107,7 +106,6 @@ def zscore(series):
 
     z = (series - series.mean()) / std
 
-    # CLIP OUTLIERS
     z = z.clip(-3, 3)
 
     return z
@@ -189,7 +187,7 @@ def load_data():
     players = clean_columns(players)
 
     # =====================================================
-    # CLEAN TEAM
+    # TEAM
     # =====================================================
 
     players["Team"] = (
@@ -199,7 +197,7 @@ def load_data():
     )
 
     # =====================================================
-    # NUMERIC
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -272,7 +270,7 @@ def load_data():
         ) * 60
 
     # =====================================================
-    # CLEAN INF
+    # CLEAN
     # =====================================================
 
     players = players.replace(
@@ -283,7 +281,7 @@ def load_data():
     players = players.fillna(0)
 
     # =====================================================
-    # POSITION-SPECIFIC NORMALIZATION
+    # POSITION NORMALIZATION
     # =====================================================
 
     z_cols = [
@@ -314,8 +312,10 @@ def load_data():
             )
 
     # =====================================================
-    # OFFENSE
+    # RATINGS
     # =====================================================
+
+    # OFFENSE
 
     players["OffenseRating"] = (
 
@@ -335,9 +335,7 @@ def load_data():
 
     )
 
-    # =====================================================
     # DEFENSE
-    # =====================================================
 
     players["DefenseRating"] = (
 
@@ -357,9 +355,7 @@ def load_data():
 
     )
 
-    # =====================================================
     # TRANSITION
-    # =====================================================
 
     players["TransitionRating"] = (
 
@@ -371,9 +367,7 @@ def load_data():
 
     )
 
-    # =====================================================
     # POSSESSION
-    # =====================================================
 
     players["PossessionRating"] = (
 
@@ -385,9 +379,7 @@ def load_data():
 
     )
 
-    # =====================================================
     # OVERALL
-    # =====================================================
 
     players["OverallRating"] = (
 
@@ -670,28 +662,3 @@ for col, (label, value) in zip(
 
         </div>
         """, unsafe_allow_html=True)
-
-# =========================================================
-# DISTRIBUTION
-# =========================================================
-
-st.divider()
-
-st.subheader("Overall Rating Distribution")
-
-fig = px.histogram(
-    df,
-    x="OverallRating",
-    nbins=40
-)
-
-fig.update_layout(
-    paper_bgcolor="#0b1020",
-    plot_bgcolor="#0b1020",
-    font_color="white"
-)
-
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
