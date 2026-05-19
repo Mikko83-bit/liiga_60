@@ -23,7 +23,7 @@ st.set_page_config(
 # TITLE
 # ==================================================
 
-st.title("🏒 Liiga Relative Impact")
+st.title(" Liiga Relative Impact")
 
 # ==================================================
 # LOAD DATA
