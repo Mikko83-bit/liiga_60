@@ -125,7 +125,7 @@ def load_data():
         /
 
         pd.to_numeric(
-            teams["Games_played"],
+            teams["Games"],
             errors="coerce"
         ).fillna(1)
 
@@ -141,7 +141,7 @@ def load_data():
         /
 
         pd.to_numeric(
-            teams["Games_played"],
+            teams["Games"],
             errors="coerce"
         ).fillna(1)
 
@@ -245,7 +245,7 @@ def load_data():
     ).fillna(0)
 
     # =====================================================
-    # CLEAN
+    # CLEAN INF
     # =====================================================
 
     df = df.replace(
@@ -433,7 +433,7 @@ with c1:
     team_filter = st.selectbox(
         "Team",
         ["All"] +
-        sorted(df["Team"].unique())
+        sorted(df["Team"].dropna().unique())
     )
 
 with c2:
@@ -462,7 +462,7 @@ if position_filter != "All":
     ]
 
 # =========================================================
-# WINSHARE TABLE
+# TABLE
 # =========================================================
 
 st.subheader("Top Win Shares")
@@ -502,7 +502,7 @@ st.header("Player Card")
 
 selected_player = st.selectbox(
     "Choose Player",
-    sorted(df["Player"].unique())
+    sorted(df["Player"].dropna().unique())
 )
 
 player_df = df[
@@ -543,7 +543,7 @@ with c3:
     )
 
 # =========================================================
-# PLAYER STATS TABLE
+# PLAYER STATS
 # =========================================================
 
 stats_table = pd.DataFrame({
