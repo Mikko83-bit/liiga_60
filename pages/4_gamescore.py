@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# FINAL VERSION
+# FINAL ENHANCED VERSION
 # =========================================================
 
 import streamlit as st
@@ -181,7 +181,7 @@ def load_data():
     df["TOI"] = df["Time_on_ice"]
 
     # =====================================================
-    # FILTER LOW SAMPLE
+    # MINIMUM SAMPLE
     # =====================================================
 
     df = df[
@@ -509,6 +509,52 @@ player_rank = (
 )
 
 # =========================================================
+# CATEGORY RANKS
+# =========================================================
+
+goals_rank = (
+    df["Goals60"]
+    .rank(ascending=False, method="min")
+    [player.name]
+)
+
+assists_rank = (
+    df["Assists60"]
+    .rank(ascending=False, method="min")
+    [player.name]
+)
+
+shots_rank = (
+    df["Shots60"]
+    .rank(ascending=False, method="min")
+    [player.name]
+)
+
+penalty_rank = (
+    df["PenaltyDiff60"]
+    .rank(ascending=False, method="min")
+    [player.name]
+)
+
+pm_rank = (
+    df["PlusMinus60"]
+    .rank(ascending=False, method="min")
+    [player.name]
+)
+
+xgf_rank = (
+    df["xGF60"]
+    .rank(ascending=False, method="min")
+    [player.name]
+)
+
+xga_rank = (
+    df["xGA60"]
+    .rank(ascending=True, method="min")
+    [player.name]
+)
+
+# =========================================================
 # PERCENTILE
 # =========================================================
 
@@ -549,16 +595,32 @@ st.plotly_chart(
 m1, m2, m3, m4 = st.columns(4)
 
 with m1:
-    st.metric("Goals/60", round(player["Goals60"], 2))
+    st.metric(
+        "Goals/60",
+        round(player["Goals60"], 2),
+        f"#{int(goals_rank)}"
+    )
 
 with m2:
-    st.metric("Assists/60", round(player["Assists60"], 2))
+    st.metric(
+        "Assists/60",
+        round(player["Assists60"], 2),
+        f"#{int(assists_rank)}"
+    )
 
 with m3:
-    st.metric("Shots/60", round(player["Shots60"], 2))
+    st.metric(
+        "Shots/60",
+        round(player["Shots60"], 2),
+        f"#{int(shots_rank)}"
+    )
 
 with m4:
-    st.metric("PenaltyDiff/60", round(player["PenaltyDiff60"], 2))
+    st.metric(
+        "PenaltyDiff/60",
+        round(player["PenaltyDiff60"], 2),
+        f"#{int(penalty_rank)}"
+    )
 
 # =========================================================
 # METRICS ROW 2
@@ -567,16 +629,31 @@ with m4:
 m5, m6, m7, m8 = st.columns(4)
 
 with m5:
-    st.metric("PlusMinus/60", round(player["PlusMinus60"], 2))
+    st.metric(
+        "PlusMinus/60",
+        round(player["PlusMinus60"], 2),
+        f"#{int(pm_rank)}"
+    )
 
 with m6:
-    st.metric("xGF/60", round(player["xGF60"], 2))
+    st.metric(
+        "xGF/60",
+        round(player["xGF60"], 2),
+        f"#{int(xgf_rank)}"
+    )
 
 with m7:
-    st.metric("xGA/60", round(player["xGA60"], 2))
+    st.metric(
+        "xGA/60",
+        round(player["xGA60"], 2),
+        f"#{int(xga_rank)}"
+    )
 
 with m8:
-    st.metric("TOI", round(player["TOI"], 1))
+    st.metric(
+        "TOI",
+        round(player["TOI"], 1)
+    )
 
 # =========================================================
 # FINAL GAME SCORE
