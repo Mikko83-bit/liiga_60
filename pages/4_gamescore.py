@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# TUNED VERSION
+# FINAL VERSION
 # =========================================================
 
 import streamlit as st
@@ -138,7 +138,7 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # TEAM CLEAN
+    # CLEAN TEAM
     # =====================================================
 
     df["Team"] = (
@@ -148,7 +148,7 @@ def load_data():
     )
 
     # =====================================================
-    # NUMERIC
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -484,6 +484,31 @@ player = df[
 ].iloc[0]
 
 # =========================================================
+# PLAYER RANK
+# =========================================================
+
+rank_df = (
+
+    df
+    .sort_values(
+        "GameScore",
+        ascending=False
+    )
+    .reset_index(drop=True)
+
+)
+
+player_rank = (
+
+    rank_df[
+        rank_df["Player"] == selected_player
+    ].index[0]
+
+    + 1
+
+)
+
+# =========================================================
 # PERCENTILE
 # =========================================================
 
@@ -498,6 +523,10 @@ gs_pct = pct(
 
 st.subheader(
     f"{player['Player']} | {player['Team']} | {player['Position']}"
+)
+
+st.caption(
+    f"#{player_rank} GameScore Rank"
 )
 
 # =========================================================
