@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA RELATIVE IMPACT
-# FIXED xGA VERSION
+# IMPROVED DEFENSIVE MODEL
 # pages/6_Liiga_Relative.py
 # =========================================================
 
@@ -142,22 +142,22 @@ def load_data():
         )
 
     # ==================================================
-    # BASIC PER60
+    # PER60 STATS
     # ==================================================
 
     df["Goals60"] = per60("Goals")
     df["Assists60"] = per60("Assists")
     df["xG60"] = per60("xG")
     df["Shots60"] = per60("Shots_on_goal")
+
     df["Entries60"] = per60("Entries")
     df["Breakouts60"] = per60("Breakouts")
+
     df["Takeaways60"] = per60("Takeaways")
     df["PuckLosses60"] = per60("Puck_losses")
 
     # ==================================================
-    # IMPORTANT FIX
-    # xGF / xGA ARE TOTALS
-    # CONVERT TO PER60 CORRECTLY
+    # xGF / xGA PER60
     # ==================================================
 
     df["xGF60"] = np.where(
@@ -251,7 +251,7 @@ def load_data():
     ) * 100
 
     # ==================================================
-    # MERGE
+    # MERGE TEAM DATA
     # ==================================================
 
     df = df.merge(
@@ -269,11 +269,6 @@ def load_data():
         .transform("mean")
     )
 
-    team_avg_xGA = (
-        df.groupby("Team")["xGA60"]
-        .transform("mean")
-    )
-
     team_avg_netxg = (
         df.groupby("Team")["NetxG"]
         .transform("mean")
@@ -284,25 +279,23 @@ def load_data():
         .transform("mean")
     )
 
+    team_avg_takeaways = (
+        df.groupby("Team")["Takeaways60"]
+        .transform("mean")
+    )
+
+    team_avg_losses = (
+        df.groupby("Team")["PuckLosses60"]
+        .transform("mean")
+    )
+
     # ==================================================
-    # RELATIVE METRICS
+    # RELATIVE OFFENCE
     # ==================================================
 
     df["Relative_xGF"] = (
         df["xGF60"] -
         team_avg_xGF
-    )
-
-    # LOWER xGA IS BETTER
-
-    df["Relative_xGA"] = (
-        team_avg_xGA -
-        df["xGA60"]
-    )
-
-    df["Relative_NetxG"] = (
-        df["NetxG"] -
-        team_avg_netxg
     )
 
     df["Relative_Offence"] = (
@@ -311,16 +304,49 @@ def load_data():
     )
 
     # ==================================================
-    # IMPACT MODEL
+    # IMPROVED DEFENSIVE MODEL
+    # ==================================================
+
+    relative_takeaways = (
+        df["Takeaways60"] -
+        team_avg_takeaways
+    )
+
+    relative_losses = (
+        df["PuckLosses60"] -
+        team_avg_losses
+    )
+
+    relative_netxg = (
+        df["NetxG"] -
+        team_avg_netxg
+    )
+
+    # ==================================================
+    # DEFENSE MODEL
+    # ==================================================
+
+    df["Defense_Raw"] = (
+
+        relative_takeaways * 0.35 +
+
+        relative_netxg * 0.45 -
+
+        relative_losses * 0.20
+
+    )
+
+    # ==================================================
+    # RELATIVE IMPACT MODEL
     # ==================================================
 
     df["Relative_Impact_Raw"] = (
 
         df["Relative_xGF"] * 0.35 +
 
-        df["Relative_xGA"] * 0.25 +
+        df["Defense_Raw"] * 0.30 +
 
-        df["Relative_NetxG"] * 0.25 +
+        relative_netxg * 0.20 +
 
         df["Relative_Offence"] * 0.15
 
@@ -333,8 +359,7 @@ def load_data():
     metrics = [
 
         "Relative_xGF",
-        "Relative_xGA",
-        "Relative_NetxG",
+        "Defense_Raw",
         "Relative_Offence",
         "Relative_Impact_Raw"
 
@@ -366,7 +391,7 @@ def load_data():
 
 
 # ==================================================
-# LOAD
+# LOAD DATA
 # ==================================================
 
 df = load_data()
@@ -477,7 +502,7 @@ else:
     env_label = "Weak Team"
 
 # ==================================================
-# TOP METRICS
+# TOP ROW
 # ==================================================
 
 c1, c2, c3 = st.columns(3)
@@ -521,15 +546,15 @@ with m1:
 with m2:
 
     st.metric(
-        "Relative xGA",
-        f"{player['Relative_xGA']:.2f}"
+        "Defense Impact",
+        f"{player['Defense_Raw']:.2f}"
     )
 
 with m3:
 
     st.metric(
         "Relative NetxG",
-        f"{player['Relative_NetxG']:.2f}"
+        f"{relative_netxg.loc[player.name]:.2f}"
     )
 
 with m4:
@@ -545,13 +570,12 @@ with m4:
 
 st.markdown("## Relative Percentiles")
 
-gauge_cols = st.columns(5)
+gauge_cols = st.columns(4)
 
 gauges = [
 
     ("xGF", "Relative_xGF_Pct"),
-    ("xGA", "Relative_xGA_Pct"),
-    ("NetxG", "Relative_NetxG_Pct"),
+    ("Defense", "Defense_Raw_Pct"),
     ("Offence", "Relative_Offence_Pct"),
     ("Impact", "Relative_Impact_Raw_Pct")
 
@@ -569,8 +593,8 @@ for col, (title, stat) in zip(gauge_cols, gauges):
             gauge={
                 "axis": {"range": [0, 100]},
                 "bar": {"color": "#4F8BFF"},
-                "bgcolor": "#111111"}
-            ,
+                "bgcolor": "#111111"
+            },
             title={"text": title}
         ))
 
@@ -602,8 +626,8 @@ leaderboard = filtered_df[[
     "Team",
     "Relative_Impact_Raw_Pct",
     "Relative_xGF_Pct",
-    "Relative_xGA_Pct",
-    "Relative_NetxG_Pct"
+    "Defense_Raw_Pct",
+    "Relative_Offence_Pct"
 ]].sort_values(
     "Relative_Impact_Raw_Pct",
     ascending=False
