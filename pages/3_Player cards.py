@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA STAT CARDS
-# CLEAN STABILIZED VERSION
+# FINAL CLEAN VERSION
 # =========================================================
 
 import streamlit as st
@@ -37,20 +37,23 @@ html, body, [class*="css"] {
 
 .metric-card {
     background-color: #121a2b;
-    padding: 18px;
+    padding: 20px;
     border-radius: 16px;
     border: 1px solid #1f2b45;
     text-align: center;
+    margin-bottom: 10px;
 }
 
 .metric-value {
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 700;
+    color: white;
 }
 
 .metric-label {
     color: #9ca3af;
-    font-size: 13px;
+    font-size: 14px;
+    margin-top: 5px;
 }
 
 </style>
@@ -94,7 +97,7 @@ def clean_columns(df):
     return df
 
 # =========================================================
-# Z SCORE
+# Z-SCORE
 # =========================================================
 
 def zscore(series):
@@ -106,9 +109,7 @@ def zscore(series):
 
     z = (series - series.mean()) / std
 
-    z = z.clip(-3, 3)
-
-    return z
+    return z.clip(-3, 3)
 
 # =========================================================
 # PERCENTILE
@@ -139,7 +140,7 @@ def make_gauge(title, value, color):
 
         title={
             "text": title,
-            "font": {"size": 22}
+            "font": {"size": 24}
         },
 
         gauge={
@@ -187,7 +188,7 @@ def load_data():
     players = clean_columns(players)
 
     # =====================================================
-    # TEAM
+    # TEAM CLEAN
     # =====================================================
 
     players["Team"] = (
@@ -197,7 +198,7 @@ def load_data():
     )
 
     # =====================================================
-    # NUMERIC COLUMNS
+    # NUMERIC
     # =====================================================
 
     numeric_cols = [
@@ -232,7 +233,7 @@ def load_data():
     players["TOI"] = players["Time_on_ice"]
 
     # =====================================================
-    # MINIMUM TOI FILTER
+    # MINIMUM TOI
     # =====================================================
 
     players = players[
@@ -260,18 +261,10 @@ def load_data():
     for raw, new in per60_stats.items():
 
         players[new] = (
-
             players[raw]
-
             /
-
             players["TOI"]
-
         ) * 60
-
-    # =====================================================
-    # CLEAN
-    # =====================================================
 
     players = players.replace(
         [np.inf, -np.inf],
@@ -315,8 +308,6 @@ def load_data():
     # RATINGS
     # =====================================================
 
-    # OFFENSE
-
     players["OffenseRating"] = (
 
         0.35 * players["Goals60_z"]
@@ -334,8 +325,6 @@ def load_data():
         0.15 * players["SlotPass60_z"]
 
     )
-
-    # DEFENSE
 
     players["DefenseRating"] = (
 
@@ -355,8 +344,6 @@ def load_data():
 
     )
 
-    # TRANSITION
-
     players["TransitionRating"] = (
 
         0.50 * players["Entries60_z"]
@@ -367,8 +354,6 @@ def load_data():
 
     )
 
-    # POSSESSION
-
     players["PossessionRating"] = (
 
         0.50 * players["CORSI_for_z"]
@@ -378,8 +363,6 @@ def load_data():
         0.50 * players["Fenwick_for_z"]
 
     )
-
-    # OVERALL
 
     players["OverallRating"] = (
 
@@ -649,16 +632,21 @@ for col, (label, value) in zip(
 
     with col:
 
-        st.markdown(f"""
+        html = f"""
         <div class="metric-card">
 
             <div class="metric-value">
-            {value}
+                {value}
             </div>
 
             <div class="metric-label">
-            {label}
+                {label}
             </div>
 
         </div>
-        """, unsafe_allow_html=True)
+        """
+
+        st.markdown(
+            html,
+            unsafe_allow_html=True
+        )
