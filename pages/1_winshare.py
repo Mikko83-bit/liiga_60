@@ -78,16 +78,14 @@ def load_data():
     # READ EXCEL
     # =====================================================
 
-    excel_file = pd.ExcelFile(FILE)
-
     players = pd.read_excel(
         FILE,
-        sheet_name=0
+        sheet_name="Skaters"
     )
 
     teams = pd.read_excel(
         FILE,
-        sheet_name=1
+        sheet_name="Teams"
     )
 
     # =====================================================
@@ -127,7 +125,7 @@ def load_data():
         /
 
         pd.to_numeric(
-            teams["Games"],
+            teams["Games_played"],
             errors="coerce"
         ).fillna(1)
 
@@ -143,7 +141,7 @@ def load_data():
         /
 
         pd.to_numeric(
-            teams["Games"],
+            teams["Games_played"],
             errors="coerce"
         ).fillna(1)
 
@@ -171,7 +169,7 @@ def load_data():
     df["TOI"] = df["TOI"].replace(0, np.nan)
 
     # =====================================================
-    # BASIC NUMERIC COLUMNS
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -179,13 +177,14 @@ def load_data():
         "Goals",
         "Assists",
         "xG",
-        "Passes_to_slot",
+        "Passes_to_the_slot",
         "Takeaways",
         "Puck_losses",
         "Puck_battles_won",
-        "Entries_via_possession",
-        "Breakouts_via_possession",
-        "CORSI_for"
+        "Entries_via_stickhandling",
+        "Breakouts_via_stickhandling",
+        "CORSI_for",
+        "NetxG"
 
     ]
 
@@ -213,7 +212,7 @@ def load_data():
     ) * 60
 
     df["SlotPass60"] = (
-        df["Passes_to_slot"] / df["TOI"]
+        df["Passes_to_the_slot"] / df["TOI"]
     ) * 60
 
     df["Takeaways60"] = (
@@ -229,24 +228,24 @@ def load_data():
     ) * 60
 
     df["Entries60"] = (
-        df["Entries_via_possession"] / df["TOI"]
+        df["Entries_via_stickhandling"] / df["TOI"]
     ) * 60
 
     df["Breakouts60"] = (
-        df["Breakouts_via_possession"] / df["TOI"]
+        df["Breakouts_via_stickhandling"] / df["TOI"]
     ) * 60
 
     # =====================================================
     # NET XG
     # =====================================================
 
-    df["NetxG"] = (
-        df["xG"] -
-        (df["xG"] * 0.90)
-    )
+    df["NetxG"] = pd.to_numeric(
+        df["NetxG"],
+        errors="coerce"
+    ).fillna(0)
 
     # =====================================================
-    # CLEAN NAN
+    # CLEAN
     # =====================================================
 
     df = df.replace(
@@ -418,7 +417,7 @@ def load_data():
 
 
 # =========================================================
-# LOAD
+# LOAD DATA
 # =========================================================
 
 df = load_data()
@@ -463,7 +462,7 @@ if position_filter != "All":
     ]
 
 # =========================================================
-# TABLE
+# WINSHARE TABLE
 # =========================================================
 
 st.subheader("Top Win Shares")
