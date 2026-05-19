@@ -35,27 +35,6 @@ html, body, [class*="css"] {
     padding-top: 2rem;
 }
 
-.metric-card {
-    background-color: #121a2b;
-    padding: 20px;
-    border-radius: 16px;
-    border: 1px solid #1f2b45;
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.metric-value {
-    font-size: 30px;
-    font-weight: 700;
-    color: white;
-}
-
-.metric-label {
-    color: #9ca3af;
-    font-size: 14px;
-    margin-top: 5px;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,7 +76,7 @@ def clean_columns(df):
     return df
 
 # =========================================================
-# Z-SCORE
+# Z SCORE
 # =========================================================
 
 def zscore(series):
@@ -614,39 +593,20 @@ st.subheader("Player Metrics")
 
 s1, s2, s3, s4, s5, s6 = st.columns(6)
 
-stats = [
+with s1:
+    st.metric("Goals", round(player["Goals"], 1))
 
-    ("Goals", round(player["Goals"], 1)),
-    ("Assists", round(player["Assists"], 1)),
-    ("xG", round(player["xG"], 2)),
-    ("NetxG", round(player["NetxG"], 2)),
-    ("Entries/60", round(player["Entries60"], 2)),
-    ("Breakouts/60", round(player["Breakouts60"], 2))
+with s2:
+    st.metric("Assists", round(player["Assists"], 1))
 
-]
+with s3:
+    st.metric("xG", round(player["xG"], 2))
 
-for col, (label, value) in zip(
-    [s1, s2, s3, s4, s5, s6],
-    stats
-):
+with s4:
+    st.metric("NetxG", round(player["NetxG"], 2))
 
-    with col:
+with s5:
+    st.metric("Entries/60", round(player["Entries60"], 2))
 
-        html = f"""
-        <div class="metric-card">
-
-            <div class="metric-value">
-                {value}
-            </div>
-
-            <div class="metric-label">
-                {label}
-            </div>
-
-        </div>
-        """
-
-        st.markdown(
-            html,
-            unsafe_allow_html=True
-        )
+with s6:
+    st.metric("Breakouts/60", round(player["Breakouts60"], 2))
