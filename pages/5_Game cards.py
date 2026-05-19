@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA PLAYER COMPARISON CARDS
-# FULLY FIXED VERSION
+# CLEAN COMPACT VERSION
 # =========================================================
 
 import streamlit as st
@@ -12,7 +12,7 @@ import numpy as np
 # =========================================================
 
 st.set_page_config(
-    page_title="Liiga Cards Comparison",
+    page_title="Liiga Skill Cards",
     page_icon="🏒",
     layout="wide"
 )
@@ -21,7 +21,7 @@ st.set_page_config(
 # TITLE
 # =========================================================
 
-st.title("🏒 Liiga Cards Comparison")
+st.title("🏒 Liiga Skill Comparison")
 
 # =========================================================
 # FILE
@@ -51,7 +51,6 @@ def clean_columns(df):
         col = col.replace(")", "")
         col = col.replace(",", "")
         col = col.replace(".", "")
-        col = col.replace("'", "")
 
         cleaned.append(col)
 
@@ -63,7 +62,7 @@ def clean_columns(df):
 # PERCENTILE
 # =========================================================
 
-def percentile_score(series):
+def percentile(series):
 
     return (
         series.rank(pct=True) * 100
@@ -106,10 +105,10 @@ def get_color(value):
         return "#efb1b1"
 
 # =========================================================
-# SKILL BOX
+# COMPACT CARD
 # =========================================================
 
-def skill_box(skill, value):
+def skill_card(skill, value):
 
     color = get_color(value)
 
@@ -117,35 +116,41 @@ def skill_box(skill, value):
 
     st.markdown(
         f"""
-<div style='
-background-color:{color};
-padding:20px;
-border-radius:10px;
-margin-bottom:24px;
+<div style="
+background:{color};
+padding:12px;
+border-radius:8px;
+margin-bottom:12px;
 text-align:center;
 color:black;
-font-weight:bold;
-'>
+height:110px;
+display:flex;
+flex-direction:column;
+justify-content:center;
+">
 
-<div style='
-font-size:16px;
-margin-bottom:4px;
-'>
+<div style="
+font-size:14px;
+font-weight:700;
+margin-bottom:2px;
+">
 {skill}
 </div>
 
-<div style='
-font-size:52px;
+<div style="
+font-size:36px;
+font-weight:900;
 line-height:1;
-'>
+">
 {int(value)}
 </div>
 
-<div style='
-font-size:13px;
+<div style="
+font-size:11px;
 letter-spacing:1px;
+font-weight:700;
 margin-top:4px;
-'>
+">
 {label}
 </div>
 
@@ -169,7 +174,7 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # NUMERIC COLUMNS
+    # NUMERIC
     # =====================================================
 
     numeric_cols = [
@@ -189,7 +194,8 @@ def load_data():
         "NetxG",
         "CORSI_for_perc",
         "Fenwick_for_perc",
-        "Time_on_ice"
+        "Time_on_ice",
+        "Breakouts_via_pass"
 
     ]
 
@@ -208,16 +214,12 @@ def load_data():
 
     df["TOI"] = df["Time_on_ice"]
 
-    # =====================================================
-    # FILTER SAMPLE
-    # =====================================================
-
     df = df[
         df["TOI"] >= 300
     ].copy()
 
     # =====================================================
-    # PER 60
+    # PER60
     # =====================================================
 
     def per60(stat):
@@ -229,17 +231,10 @@ def load_data():
         ) * 60
 
     df["Goals60"] = per60("Goals")
-
     df["Assists60"] = per60("Assists")
-
-    df["FirstAssist60"] = per60("First_assist")
-
     df["Shots60"] = per60("Shots")
-
     df["Entries60"] = per60("Entries")
-
     df["Breakouts60"] = per60("Breakouts")
-
     df["Takeaways60"] = per60("Takeaways")
 
     # =====================================================
@@ -247,27 +242,19 @@ def load_data():
     # =====================================================
 
     df["xGF60"] = (
-
         df["Team_xG_when_on_ice"]
-
         /
-
         df["TOI"]
-
     ) * 60
 
     df["xGA60"] = (
-
         df["Opponents_xG_when_on_ice"]
-
         /
-
         df["TOI"]
-
     ) * 60
 
     # =====================================================
-    # SHOOTING
+    # SCORES
     # =====================================================
 
     df["ShootingRaw"] = (
@@ -284,17 +271,13 @@ def load_data():
 
     )
 
-    # =====================================================
-    # PLAYMAKING
-    # =====================================================
-
     df["PlaymakingRaw"] = (
 
         0.50 * df["Assists60"]
 
         +
 
-        0.30 * df["FirstAssist60"]
+        0.30 * df["First_assist"]
 
         +
 
@@ -303,22 +286,26 @@ def load_data():
     )
 
     # =====================================================
-    # TRANSITION
+    # UPDATED TRANSITION MODEL
     # =====================================================
 
     df["TransitionRaw"] = (
 
-        0.50 * df["Entries60"]
+        0.30 * df["Entries60"]
 
         +
 
-        0.50 * df["Breakouts60"]
+        0.30 * df["Breakouts60"]
+
+        +
+
+        0.20 * df["Breakouts_via_pass"]
+
+        +
+
+        0.20 * df["Accurate_passes_perc"]
 
     )
-
-    # =====================================================
-    # PUCK MOVEMENT
-    # =====================================================
 
     df["PuckMovementRaw"] = (
 
@@ -330,10 +317,6 @@ def load_data():
 
     )
 
-    # =====================================================
-    # DEFENSE
-    # =====================================================
-
     df["DefenseRaw"] = (
 
         0.50 * df["Takeaways60"]
@@ -343,10 +326,6 @@ def load_data():
         0.50 * df["xGA60"]
 
     )
-
-    # =====================================================
-    # IMPACT
-    # =====================================================
 
     df["ImpactRaw"] = (
 
@@ -363,7 +342,7 @@ def load_data():
     )
 
     # =====================================================
-    # SCORES
+    # PERCENTILES
     # =====================================================
 
     categories = [
@@ -379,10 +358,8 @@ def load_data():
 
     for cat in categories:
 
-        raw = f"{cat}Raw"
-
-        df[f"{cat}Score"] = percentile_score(
-            df[raw]
+        df[f"{cat}Score"] = percentile(
+            df[f"{cat}Raw"]
         )
 
     # =====================================================
@@ -446,19 +423,19 @@ def load_data():
 df = load_data()
 
 # =========================================================
-# PLAYER SELECT
+# SELECT PLAYERS
 # =========================================================
 
-col1, col2 = st.columns(2)
+c1, c2 = st.columns(2)
 
-with col1:
+with c1:
 
     player1_name = st.selectbox(
         "Player 1",
         sorted(df["Player"].unique())
     )
 
-with col2:
+with c2:
 
     player2_name = st.selectbox(
         "Player 2",
@@ -478,35 +455,35 @@ player2 = df[
 # HEADER
 # =========================================================
 
-c1, c2, c3 = st.columns([5,1,5])
+h1, h2, h3 = st.columns([5,1,5])
 
-with c1:
+with h1:
 
     st.markdown(f"""
-# {player1['Player']}
+## {player1['Player']}
 
-### {player1['Team']} | {player1['Position']}
+{player1['Team']} | {player1['Position']}
 """)
 
-with c2:
+with h2:
 
-    st.markdown("# VS")
+    st.markdown("## VS")
 
-with c3:
+with h3:
 
     st.markdown(f"""
-# {player2['Player']}
+## {player2['Player']}
 
-### {player2['Team']} | {player2['Position']}
+{player2['Team']} | {player2['Position']}
 """)
 
 # =========================================================
-# SKILL COMPARISON
+# SKILLS
 # =========================================================
 
 st.markdown("## Skill Comparison")
 
-left, space, right = st.columns([5,1,5])
+left, gap, right = st.columns([5,0.5,5])
 
 skills = [
 
@@ -523,7 +500,7 @@ with left:
 
     for label, col in skills:
 
-        skill_box(
+        skill_card(
             label,
             player1[col]
         )
@@ -532,13 +509,13 @@ with right:
 
     for label, col in skills:
 
-        skill_box(
+        skill_card(
             label,
             player2[col]
         )
 
 # =========================================================
-# OVERALL SCORES
+# OVERALL
 # =========================================================
 
 st.divider()
@@ -548,13 +525,13 @@ o1, o2 = st.columns(2)
 with o1:
 
     st.metric(
-        f"{player1['Player']} Overall",
+        "Overall",
         round(player1["OverallScore"], 1)
     )
 
 with o2:
 
     st.metric(
-        f"{player2['Player']} Overall",
+        "Overall",
         round(player2["OverallScore"], 1)
     )
