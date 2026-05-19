@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA STAT CARDS
-# Modern Hockey Analytics Card
+# NORMALIZED RATING ENGINE
 # =========================================================
 
 import streamlit as st
@@ -36,42 +36,22 @@ html, body, [class*="css"] {
     padding-top: 2rem;
 }
 
-.card {
+.metric-card {
     background-color: #121a2b;
-    border-radius: 20px;
-    padding: 25px;
-    margin-bottom: 20px;
+    padding: 18px;
+    border-radius: 16px;
     border: 1px solid #1f2b45;
-}
-
-.metric-title {
-    font-size: 15px;
-    color: #9ca3af;
     text-align: center;
 }
 
 .metric-value {
-    font-size: 34px;
-    font-weight: 700;
-    text-align: center;
-}
-
-.small-stat {
-    background-color: #121a2b;
-    border-radius: 16px;
-    padding: 12px;
-    text-align: center;
-    border: 1px solid #1f2b45;
-}
-
-.small-stat-value {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 700;
 }
 
-.small-stat-label {
+.metric-label {
     color: #9ca3af;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 </style>
@@ -90,7 +70,7 @@ st.title("🏒 Liiga Stat Cards 2025-2026")
 FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 # =========================================================
-# HELPERS
+# CLEAN COLUMNS
 # =========================================================
 
 def clean_columns(df):
@@ -115,13 +95,38 @@ def clean_columns(df):
     return df
 
 
-def percentile(series, value):
+# =========================================================
+# Z SCORE
+# =========================================================
+
+def zscore(series):
+
+    std = series.std()
+
+    if std == 0:
+        return pd.Series(0, index=series.index)
+
+    return (
+        (series - series.mean())
+        / std
+    )
+
+
+# =========================================================
+# PERCENTILE
+# =========================================================
+
+def pct(series, value):
 
     return percentileofscore(
         series,
         value
     )
 
+
+# =========================================================
+# GAUGE
+# =========================================================
 
 def make_gauge(title, value, color):
 
@@ -164,7 +169,7 @@ def make_gauge(title, value, color):
     ))
 
     fig.update_layout(
-        height=300,
+        height=280,
         paper_bgcolor="#0b1020",
         font={"color": "white"}
     )
@@ -186,11 +191,19 @@ def load_data():
 
     players = clean_columns(players)
 
+    # =====================================================
+    # CLEAN TEAM
+    # =====================================================
+
     players["Team"] = (
         players["Team"]
         .astype(str)
         .str.strip()
     )
+
+    # =====================================================
+    # NUMERIC COLUMNS
+    # =====================================================
 
     numeric_cols = [
 
@@ -229,7 +242,7 @@ def load_data():
     # PER 60
     # =====================================================
 
-    per60_cols = {
+    per60_stats = {
 
         "Goals": "Goals60",
         "Assists": "Assists60",
@@ -243,13 +256,21 @@ def load_data():
 
     }
 
-    for raw, new in per60_cols.items():
+    for raw, new in per60_stats.items():
 
         players[new] = (
+
             players[raw]
+
             /
+
             players["TOI"]
+
         ) * 60
+
+    # =====================================================
+    # CLEAN INF
+    # =====================================================
 
     players = players.replace(
         [np.inf, -np.inf],
@@ -259,70 +280,101 @@ def load_data():
     players = players.fillna(0)
 
     # =====================================================
-    # RATINGS
+    # Z-SCORES
     # =====================================================
 
+    z_cols = [
+
+        "Goals60",
+        "Assists60",
+        "xG60",
+        "SlotPass60",
+        "Entries60",
+        "Breakouts60",
+        "Takeaways60",
+        "PuckLoss60",
+        "Battles60",
+        "NetxG",
+        "CORSI_for",
+        "Fenwick_for"
+
+    ]
+
+    for col in z_cols:
+
+        players[f"{col}_z"] = zscore(
+            players[col]
+        )
+
+    # =====================================================
     # OFFENSE
+    # =====================================================
 
     players["OffenseRating"] = (
 
-        0.35 * players["Goals60"]
+        0.35 * players["Goals60_z"]
 
         +
 
-        0.30 * players["Assists60"]
+        0.30 * players["Assists60_z"]
 
         +
 
-        0.20 * players["xG60"]
+        0.20 * players["xG60_z"]
 
         +
 
-        0.15 * players["SlotPass60"]
+        0.15 * players["SlotPass60_z"]
 
     )
 
+    # =====================================================
     # DEFENSE
+    # =====================================================
 
     players["DefenseRating"] = (
 
-        0.35 * players["NetxG"]
+        0.35 * players["NetxG_z"]
 
         +
 
-        0.25 * players["Takeaways60"]
+        0.25 * players["Takeaways60_z"]
 
         -
 
-        0.20 * players["PuckLoss60"]
+        0.25 * players["PuckLoss60_z"]
 
         +
 
-        0.20 * players["Battles60"]
+        0.15 * players["Battles60_z"]
 
     )
 
+    # =====================================================
     # TRANSITION
+    # =====================================================
 
     players["TransitionRating"] = (
 
-        0.50 * players["Entries60"]
+        0.50 * players["Entries60_z"]
 
         +
 
-        0.50 * players["Breakouts60"]
+        0.50 * players["Breakouts60_z"]
 
     )
 
+    # =====================================================
     # POSSESSION
+    # =====================================================
 
     players["PossessionRating"] = (
 
-        0.50 * players["CORSI_for"]
+        0.50 * players["CORSI_for_z"]
 
         +
 
-        0.50 * players["Fenwick_for"]
+        0.50 * players["Fenwick_for_z"]
 
     )
 
@@ -398,7 +450,7 @@ if position_filter != "All":
 
 st.subheader("Top Overall Ratings")
 
-top_table = (
+table = (
 
     filtered_df[[
         "Player",
@@ -418,7 +470,7 @@ top_table = (
 )
 
 st.dataframe(
-    top_table,
+    table,
     use_container_width=True,
     hide_index=True
 )
@@ -431,9 +483,11 @@ st.divider()
 
 st.header("Player Stat Card")
 
-# TEAM FILTER FOR PLAYER SEARCH
+# =========================================================
+# TEAM FILTER
+# =========================================================
 
-team_card_filter = st.selectbox(
+card_team = st.selectbox(
     "Choose Team",
     sorted(df["Team"].unique())
 )
@@ -441,7 +495,7 @@ team_card_filter = st.selectbox(
 team_players = (
 
     df[
-        df["Team"] == team_card_filter
+        df["Team"] == card_team
     ]["Player"]
 
     .sort_values()
@@ -461,40 +515,30 @@ player = df[
 # HEADER
 # =========================================================
 
-st.markdown(f"""
-<div class="card">
-
-<h1 style="margin-bottom:0px;">
-{player['Player']}
-</h1>
-
-<p style="color:#9ca3af;font-size:18px;">
-{player['Team']} • {player['Position']}
-</p>
-
-</div>
-""", unsafe_allow_html=True)
+st.subheader(
+    f"{player['Player']} | {player['Team']} | {player['Position']}"
+)
 
 # =========================================================
 # PERCENTILES
 # =========================================================
 
-off_pct = percentile(
+off_pct = pct(
     df["OffenseRating"],
     player["OffenseRating"]
 )
 
-def_pct = percentile(
+def_pct = pct(
     df["DefenseRating"],
     player["DefenseRating"]
 )
 
-trans_pct = percentile(
+trans_pct = pct(
     df["TransitionRating"],
     player["TransitionRating"]
 )
 
-overall_pct = percentile(
+overall_pct = pct(
     df["OverallRating"],
     player["OverallRating"]
 )
@@ -544,13 +588,13 @@ with g4:
         make_gauge(
             "Overall",
             round(overall_pct),
-            "#a78bfa"
+            "#a855f7"
         ),
         use_container_width=True
     )
 
 # =========================================================
-# SMALL STATS
+# PLAYER STATS
 # =========================================================
 
 st.subheader("Player Metrics")
@@ -559,12 +603,12 @@ s1, s2, s3, s4, s5, s6 = st.columns(6)
 
 stats = [
 
-    ("TOI", round(player["TOI"], 1)),
     ("Goals", round(player["Goals"], 1)),
     ("Assists", round(player["Assists"], 1)),
     ("xG", round(player["xG"], 2)),
     ("NetxG", round(player["NetxG"], 2)),
-    ("Corsi", round(player["CORSI_for"], 1))
+    ("Entries/60", round(player["Entries60"], 2)),
+    ("Breakouts/60", round(player["Breakouts60"], 2))
 
 ]
 
@@ -576,62 +620,24 @@ for col, (label, value) in zip(
     with col:
 
         st.markdown(f"""
-        <div class="small-stat">
+        <div class="metric-card">
 
-        <div class="small-stat-value">
-        {value}
-        </div>
+            <div class="metric-value">
+            {value}
+            </div>
 
-        <div class="small-stat-label">
-        {label}
-        </div>
+            <div class="metric-label">
+            {label}
+            </div>
 
         </div>
         """, unsafe_allow_html=True)
 
 # =========================================================
-# PER 60 TABLE
-# =========================================================
-
-st.subheader("Per 60 Statistics")
-
-per60_table = pd.DataFrame({
-
-    "Metric": [
-
-        "Goals/60",
-        "Assists/60",
-        "xG/60",
-        "Entries/60",
-        "Breakouts/60",
-        "Takeaways/60",
-        "Puck Losses/60"
-
-    ],
-
-    "Value": [
-
-        round(player["Goals60"], 2),
-        round(player["Assists60"], 2),
-        round(player["xG60"], 2),
-        round(player["Entries60"], 2),
-        round(player["Breakouts60"], 2),
-        round(player["Takeaways60"], 2),
-        round(player["PuckLoss60"], 2)
-
-    ]
-
-})
-
-st.dataframe(
-    per60_table,
-    use_container_width=True,
-    hide_index=True
-)
-
-# =========================================================
 # DISTRIBUTION
 # =========================================================
+
+st.divider()
 
 st.subheader("Overall Rating Distribution")
 
