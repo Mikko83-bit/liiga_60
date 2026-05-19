@@ -1,6 +1,6 @@
 # =========================================================
-# TRUE STYLE WIN SHARE MODEL
-# Inspired by Hockey Point Shares philosophy
+# TRUE POINT SHARES MODEL
+# TOI-BASED DEFENSIVE ALLOCATION
 # =========================================================
 
 import streamlit as st
@@ -9,7 +9,7 @@ import numpy as np
 import plotly.express as px
 
 # =========================================================
-# PAGE CONFIG
+# PAGE
 # =========================================================
 
 st.set_page_config(
@@ -27,7 +27,7 @@ st.title("🏒 Liiga Point Shares 2025-2026")
 FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 # =========================================================
-# HELPERS
+# CLEAN COLUMNS
 # =========================================================
 
 def clean_columns(df):
@@ -60,7 +60,7 @@ def clean_columns(df):
 def load_data():
 
     # =====================================================
-    # READ
+    # READ EXCEL
     # =====================================================
 
     players = pd.read_excel(
@@ -81,7 +81,7 @@ def load_data():
     teams = clean_columns(teams)
 
     # =====================================================
-    # CLEAN TEAM
+    # TEAM CLEAN
     # =====================================================
 
     players["Team"] = (
@@ -97,7 +97,7 @@ def load_data():
     )
 
     # =====================================================
-    # NUMERIC
+    # NUMERIC PLAYER COLUMNS
     # =====================================================
 
     player_numeric = [
@@ -112,9 +112,7 @@ def load_data():
         "Puck_battles_won",
         "NetxG",
         "Penalties_drawn",
-        "Penalties",
-        "Plus",
-        "Minus"
+        "Penalties"
 
     ]
 
@@ -125,11 +123,15 @@ def load_data():
             errors="coerce"
         ).fillna(0)
 
+    # =====================================================
+    # NUMERIC TEAM COLUMNS
+    # =====================================================
+
     team_numeric = [
 
+        "Games",
         "Goals_for",
-        "Goals_agn",
-        "Games"
+        "Goals_agn"
 
     ]
 
@@ -141,13 +143,17 @@ def load_data():
         ).fillna(0)
 
     # =====================================================
-    # LEAGUE VALUES
+    # LEAGUE BASELINES
     # =====================================================
 
     league_goals_per_game = (
+
         teams["Goals_for"].sum()
+
         /
+
         teams["Games"].sum()
+
     )
 
     # =====================================================
@@ -162,9 +168,13 @@ def load_data():
 
         (
             (7 / 12)
+
             *
+
             teams["Games"]
+
             *
+
             league_goals_per_game
         )
 
@@ -177,8 +187,11 @@ def load_data():
         )
 
         *
+
         teams["Games"]
+
         *
+
         league_goals_per_game
 
         -
@@ -192,6 +205,7 @@ def load_data():
     # =====================================================
 
     df = players.merge(
+
         teams[
             [
                 "Team",
@@ -199,15 +213,43 @@ def load_data():
                 "MGA"
             ]
         ],
+
         on="Team",
         how="left"
+
     )
 
     # =====================================================
     # TOI
     # =====================================================
 
-    df["TOI"] = df["Time_on_ice"]
+    df["TOI"] = pd.to_numeric(
+        df["Time_on_ice"],
+        errors="coerce"
+    ).fillna(0)
+
+    # =====================================================
+    # TEAM TOI
+    # =====================================================
+
+    team_toi = (
+
+        df.groupby("Team")["TOI"]
+        .sum()
+        .reset_index()
+
+    )
+
+    team_toi.columns = [
+        "Team",
+        "TeamTOI"
+    ]
+
+    df = df.merge(
+        team_toi,
+        on="Team",
+        how="left"
+    )
 
     # =====================================================
     # GOALS CREATED
@@ -280,6 +322,12 @@ def load_data():
 
     )
 
+    df["OffensiveShare"] = (
+        df["OffensiveShare"]
+        .replace([np.inf, -np.inf], 0)
+        .fillna(0)
+    )
+
     # =====================================================
     # OFFENSIVE POINT SHARES
     # =====================================================
@@ -295,102 +343,21 @@ def load_data():
     )
 
     # =====================================================
-    # DEFENSIVE IMPACT
+    # BASE DEFENSIVE SHARE (TOI BASED)
     # =====================================================
 
-    df["DefensiveImpact"] = (
+    df["TOIShare"] = (
 
-        (
-            0.45
-            *
-            df["NetxG"]
-        )
-
-        +
-
-        (
-            0.20
-            *
-            df["Takeaways"]
-        )
-
-        -
-
-        (
-            0.20
-            *
-            df["Puck_losses"]
-        )
-
-        +
-
-        (
-            0.10
-            *
-            df["Puck_battles_won"]
-        )
-
-        +
-
-        (
-            0.10
-            *
-            (
-                df["Penalties_drawn"]
-                -
-                df["Penalties"]
-            )
-        )
-
-    )
-
-    # =====================================================
-    # NEGATIVES
-    # =====================================================
-
-    df["DefensiveImpact"] = df[
-        "DefensiveImpact"
-    ].clip(lower=-999)
-
-    # =====================================================
-    # TEAM DEFENSE IMPACT
-    # =====================================================
-
-    team_def = (
-
-        df.groupby("Team")["DefensiveImpact"]
-        .sum()
-        .reset_index()
-
-    )
-
-    team_def.columns = [
-        "Team",
-        "TeamDefenseImpact"
-    ]
-
-    df = df.merge(
-        team_def,
-        on="Team",
-        how="left"
-    )
-
-    # =====================================================
-    # DEFENSIVE SHARE
-    # =====================================================
-
-    df["DefensiveShare"] = (
-
-        df["DefensiveImpact"]
+        df["TOI"]
 
         /
 
-        df["TeamDefenseImpact"]
+        df["TeamTOI"]
 
     )
 
-    df["DefensiveShare"] = (
-        df["DefensiveShare"]
+    df["TOIShare"] = (
+        df["TOIShare"]
         .replace([np.inf, -np.inf], 0)
         .fillna(0)
     )
@@ -403,19 +370,19 @@ def load_data():
 
         df["Position"] == "D",
 
-        10 / 7,
+        1.15,
 
-        5 / 7
+        0.90
 
     )
 
     # =====================================================
-    # DEFENSIVE POINT SHARES
+    # BASE DPS
     # =====================================================
 
-    df["DPS"] = (
+    df["BaseDPS"] = (
 
-        df["DefensiveShare"]
+        df["TOIShare"]
 
         *
 
@@ -424,6 +391,84 @@ def load_data():
         *
 
         df["PositionAdjustment"]
+
+    )
+
+    # =====================================================
+    # DEFENSIVE MODIFIER
+    # SMALL ADJUSTMENT ONLY
+    # =====================================================
+
+    df["DefensiveModifier"] = (
+
+        1
+
+        +
+
+        (
+            0.015
+            *
+            df["NetxG"]
+        )
+
+        +
+
+        (
+            0.002
+            *
+            df["Takeaways"]
+        )
+
+        -
+
+        (
+            0.002
+            *
+            df["Puck_losses"]
+        )
+
+        +
+
+        (
+            0.001
+            *
+            df["Puck_battles_won"]
+        )
+
+        +
+
+        (
+            0.01
+            *
+            (
+                df["Penalties_drawn"]
+                -
+                df["Penalties"]
+            )
+        )
+
+    )
+
+    # =====================================================
+    # CLIP MODIFIER
+    # =====================================================
+
+    df["DefensiveModifier"] = (
+        df["DefensiveModifier"]
+        .clip(0.75, 1.25)
+    )
+
+    # =====================================================
+    # FINAL DPS
+    # =====================================================
+
+    df["DPS"] = (
+
+        df["BaseDPS"]
+
+        *
+
+        df["DefensiveModifier"]
 
     )
 
@@ -468,15 +513,17 @@ def load_data():
     )
 
     # =====================================================
-    # RANK
+    # PERCENTILE
     # =====================================================
 
-    df["PS_Rank"] = (
+    df["PS_percentile"] = (
+
         df["PointShares"]
-        .rank(
-            ascending=False,
-            method="dense"
-        )
+
+        .rank(pct=True)
+
+        * 100
+
     )
 
     # =====================================================
@@ -521,7 +568,7 @@ with c2:
     )
 
 # =========================================================
-# FILTER
+# FILTER DATA
 # =========================================================
 
 filtered_df = df.copy()
@@ -552,7 +599,8 @@ table = (
         "Position",
         "OPS",
         "DPS",
-        "PointShares"
+        "PointShares",
+        "PS_percentile"
     ]]
 
     .sort_values(
@@ -588,12 +636,16 @@ player_df = df[
 player = player_df.iloc[0]
 
 # =========================================================
-# INFO
+# PLAYER HEADER
 # =========================================================
 
 st.subheader(
     f"{player['Player']} | {player['Team']} | {player['Position']}"
 )
+
+# =========================================================
+# METRICS
+# =========================================================
 
 c1, c2, c3 = st.columns(3)
 
@@ -619,7 +671,7 @@ with c3:
     )
 
 # =========================================================
-# PLAYER STATS
+# PLAYER DETAILS
 # =========================================================
 
 stats = pd.DataFrame({
@@ -632,7 +684,8 @@ stats = pd.DataFrame({
         "Goals Created",
         "NetxG",
         "Takeaways",
-        "Puck Losses"
+        "Puck Losses",
+        "TOI"
 
     ],
 
@@ -644,7 +697,8 @@ stats = pd.DataFrame({
         round(player["GoalsCreated"], 1),
         round(player["NetxG"], 1),
         round(player["Takeaways"], 1),
-        round(player["Puck_losses"], 1)
+        round(player["Puck_losses"], 1),
+        round(player["TOI"], 1)
 
     ]
 
