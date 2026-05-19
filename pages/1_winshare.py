@@ -50,12 +50,18 @@ def safe_z(series):
 def clean_columns(df):
 
     df.columns = (
+
         df.columns
+
         .str.strip()
+
         .str.replace(" ", "_")
         .str.replace("/", "_")
         .str.replace("%", "perc")
         .str.replace("-", "_")
+        .str.replace("(", "", regex=False)
+        .str.replace(")", "", regex=False)
+
     )
 
     return df
@@ -72,14 +78,16 @@ def load_data():
     # READ EXCEL
     # =====================================================
 
+    excel_file = pd.ExcelFile(FILE)
+
     players = pd.read_excel(
         FILE,
-        sheet_name="Skaters"
+        sheet_name=0
     )
 
     teams = pd.read_excel(
         FILE,
-        sheet_name="Teams"
+        sheet_name=1
     )
 
     # =====================================================
@@ -90,7 +98,7 @@ def load_data():
     teams = clean_columns(teams)
 
     # =====================================================
-    # TEAM CLEAN
+    # CLEAN TEAM NAMES
     # =====================================================
 
     players["Team"] = (
@@ -110,13 +118,35 @@ def load_data():
     # =====================================================
 
     teams["GPG"] = (
-        teams["Goals_for"] /
-        teams["Games"]
+
+        pd.to_numeric(
+            teams["Goals_for"],
+            errors="coerce"
+        ).fillna(0)
+
+        /
+
+        pd.to_numeric(
+            teams["Games"],
+            errors="coerce"
+        ).fillna(1)
+
     )
 
     teams["GAPG"] = (
-        teams["Goals_agn"] /
-        teams["Games"]
+
+        pd.to_numeric(
+            teams["Goals_agn"],
+            errors="coerce"
+        ).fillna(0)
+
+        /
+
+        pd.to_numeric(
+            teams["Games"],
+            errors="coerce"
+        ).fillna(1)
+
     )
 
     # =====================================================
@@ -141,7 +171,7 @@ def load_data():
     df["TOI"] = df["TOI"].replace(0, np.nan)
 
     # =====================================================
-    # BASIC STATS
+    # BASIC NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -167,7 +197,7 @@ def load_data():
         ).fillna(0)
 
     # =====================================================
-    # PER 60
+    # PER 60 STATS
     # =====================================================
 
     df["Goals60"] = (
@@ -214,6 +244,17 @@ def load_data():
         df["xG"] -
         (df["xG"] * 0.90)
     )
+
+    # =====================================================
+    # CLEAN NAN
+    # =====================================================
+
+    df = df.replace(
+        [np.inf, -np.inf],
+        0
+    )
+
+    df = df.fillna(0)
 
     # =====================================================
     # POSITION ADJUSTED Z-SCORES
@@ -321,6 +362,10 @@ def load_data():
 
     )
 
+    # =====================================================
+    # DWS
+    # =====================================================
+
     df["DWS"] = df["Raw_DWS"]
 
     # =====================================================
@@ -368,17 +413,6 @@ def load_data():
         df["WS"]
         .rank(pct=True) * 100
     )
-
-    # =====================================================
-    # CLEAN
-    # =====================================================
-
-    df = df.replace(
-        [np.inf, -np.inf],
-        0
-    )
-
-    df = df.fillna(0)
 
     return df
 
