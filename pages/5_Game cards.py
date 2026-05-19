@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA PLAYER COMPARISON CARDS
-# CLEAN COMPACT VERSION
+# FINAL FIXED VERSION
 # =========================================================
 
 import streamlit as st
@@ -51,6 +51,7 @@ def clean_columns(df):
         col = col.replace(")", "")
         col = col.replace(",", "")
         col = col.replace(".", "")
+        col = col.replace("'", "")
 
         cleaned.append(col)
 
@@ -105,7 +106,7 @@ def get_color(value):
         return "#efb1b1"
 
 # =========================================================
-# COMPACT CARD
+# COMPACT SKILL CARD
 # =========================================================
 
 def skill_card(skill, value):
@@ -174,7 +175,7 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # NUMERIC
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -185,6 +186,7 @@ def load_data():
         "Shots",
         "Entries",
         "Breakouts",
+        "Breakouts_via_pass",
         "Takeaways",
         "Puck_touches",
         "Puck_control_time",
@@ -194,8 +196,7 @@ def load_data():
         "NetxG",
         "CORSI_for_perc",
         "Fenwick_for_perc",
-        "Time_on_ice",
-        "Breakouts_via_pass"
+        "Time_on_ice"
 
     ]
 
@@ -214,6 +215,10 @@ def load_data():
 
     df["TOI"] = df["Time_on_ice"]
 
+    # =====================================================
+    # FILTER LOW SAMPLE
+    # =====================================================
+
     df = df[
         df["TOI"] >= 300
     ].copy()
@@ -231,10 +236,15 @@ def load_data():
         ) * 60
 
     df["Goals60"] = per60("Goals")
+
     df["Assists60"] = per60("Assists")
+
     df["Shots60"] = per60("Shots")
+
     df["Entries60"] = per60("Entries")
+
     df["Breakouts60"] = per60("Breakouts")
+
     df["Takeaways60"] = per60("Takeaways")
 
     # =====================================================
@@ -242,19 +252,27 @@ def load_data():
     # =====================================================
 
     df["xGF60"] = (
+
         df["Team_xG_when_on_ice"]
+
         /
+
         df["TOI"]
+
     ) * 60
 
     df["xGA60"] = (
+
         df["Opponents_xG_when_on_ice"]
+
         /
+
         df["TOI"]
+
     ) * 60
 
     # =====================================================
-    # SCORES
+    # SHOOTING
     # =====================================================
 
     df["ShootingRaw"] = (
@@ -271,6 +289,10 @@ def load_data():
 
     )
 
+    # =====================================================
+    # PLAYMAKING
+    # =====================================================
+
     df["PlaymakingRaw"] = (
 
         0.50 * df["Assists60"]
@@ -286,7 +308,7 @@ def load_data():
     )
 
     # =====================================================
-    # UPDATED TRANSITION MODEL
+    # TRANSITION
     # =====================================================
 
     df["TransitionRaw"] = (
@@ -307,6 +329,10 @@ def load_data():
 
     )
 
+    # =====================================================
+    # PUCK MOVEMENT
+    # =====================================================
+
     df["PuckMovementRaw"] = (
 
         0.50 * df["Puck_touches"]
@@ -317,6 +343,10 @@ def load_data():
 
     )
 
+    # =====================================================
+    # DEFENSE
+    # =====================================================
+
     df["DefenseRaw"] = (
 
         0.50 * df["Takeaways60"]
@@ -326,6 +356,10 @@ def load_data():
         0.50 * df["xGA60"]
 
     )
+
+    # =====================================================
+    # IMPACT
+    # =====================================================
 
     df["ImpactRaw"] = (
 
@@ -342,7 +376,7 @@ def load_data():
     )
 
     # =====================================================
-    # PERCENTILES
+    # CATEGORY SCORES
     # =====================================================
 
     categories = [
@@ -363,7 +397,7 @@ def load_data():
         )
 
     # =====================================================
-    # OVERALL
+    # OVERALL SCORE
     # =====================================================
 
     forwards = df["Position"] == "F"
@@ -423,7 +457,7 @@ def load_data():
 df = load_data()
 
 # =========================================================
-# SELECT PLAYERS
+# PLAYER SELECT
 # =========================================================
 
 c1, c2 = st.columns(2)
