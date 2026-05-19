@@ -1,6 +1,6 @@
 # =========================================================
-# SDHL / LIIGA PLAYER COMPARISON
-# CLEAN HOCKEYSTATCARDS STYLE
+# LIIGA PLAYER COMPARISON
+# FINAL CLEAN VERSION WITH LOGOS
 # =========================================================
 
 import streamlit as st
@@ -13,7 +13,7 @@ import os
 # =========================================================
 
 st.set_page_config(
-    page_title="Player Comparison",
+    page_title="Liiga Player Comparison",
     page_icon="🏒",
     layout="wide"
 )
@@ -25,58 +25,61 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-.block-container{
-    padding-top:2rem;
-    max-width:1450px;
-}
-
-html, body, [class*="css"] {
+html, body, [class*="css"]  {
     background-color:#030817;
     color:white;
     font-family:Arial;
 }
 
-/* remove top spacing */
-div[data-testid="stVerticalBlock"]{
-    gap:0.7rem;
+.block-container{
+    padding-top:2rem;
+    max-width:1450px;
 }
 
-/* sidebar */
+/* Sidebar */
 section[data-testid="stSidebar"]{
-    background:#111827;
+    background-color:#111827;
 }
 
-/* metric cards */
-.skill-card{
-    border-radius:12px;
-    padding:16px;
-    text-align:center;
-    margin-bottom:16px;
-    height:105px;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-}
-
-/* title */
+/* Main Title */
 .main-title{
-    font-size:52px;
+    font-size:54px;
     font-weight:900;
     margin-bottom:10px;
 }
 
-/* player names */
+/* Player Name */
 .player-name{
-    font-size:32px;
+    font-size:36px;
     font-weight:800;
-    margin-top:8px;
+    margin-top:5px;
 }
 
-/* subtitle */
+/* Player Subtitle */
 .player-sub{
     font-size:20px;
     color:#d1d5db;
+    margin-bottom:15px;
+}
+
+/* Skill Title */
+.skill-title{
+    font-size:38px;
+    font-weight:900;
+    margin-top:20px;
     margin-bottom:20px;
+}
+
+/* Skill Card */
+.skill-card{
+    border-radius:12px;
+    padding:16px;
+    text-align:center;
+    margin-bottom:18px;
+    height:115px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
 }
 
 </style>
@@ -87,7 +90,7 @@ section[data-testid="stSidebar"]{
 # =========================================================
 
 st.markdown(
-    '<div class="main-title">🏒 SDHL Player Comparison</div>',
+    '<div class="main-title">🏒 Liiga Player Comparison</div>',
     unsafe_allow_html=True
 )
 
@@ -103,7 +106,7 @@ FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 def clean_columns(df):
 
-    cols = []
+    cleaned = []
 
     for col in df.columns:
 
@@ -121,9 +124,9 @@ def clean_columns(df):
         col = col.replace(".", "")
         col = col.replace("'", "")
 
-        cols.append(col)
+        cleaned.append(col)
 
-    df.columns = cols
+    df.columns = cleaned
 
     return df
 
@@ -175,7 +178,7 @@ def get_color(value):
 
 def get_logo(team):
 
-    path = f"logos/{team}.png"
+    path = f"../logos/{team}.png"
 
     if os.path.exists(path):
 
@@ -184,7 +187,7 @@ def get_logo(team):
     return None
 
 # =========================================================
-# CARD
+# SKILL CARD
 # =========================================================
 
 def skill_card(skill, value):
@@ -204,7 +207,7 @@ color:black;
 <div style="
 font-size:16px;
 font-weight:700;
-margin-bottom:6px;
+margin-bottom:4px;
 ">
 {skill}
 </div>
@@ -218,8 +221,8 @@ line-height:1;
 </div>
 
 <div style="
-font-size:13px;
-font-weight:700;
+font-size:12px;
+font-weight:800;
 letter-spacing:1px;
 margin-top:5px;
 ">
@@ -243,7 +246,7 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # FIND GAMES COLUMN
+    # GAMES COLUMN
     # =====================================================
 
     possible_games_cols = [
@@ -261,7 +264,6 @@ def load_data():
         if col in df.columns:
 
             games_col = col
-
             break
 
     if games_col:
@@ -514,7 +516,7 @@ if position_filter != "All":
     ]
 
 # =========================================================
-# TEAM FILTERS
+# TEAMS
 # =========================================================
 
 teams = sorted(
@@ -533,7 +535,7 @@ team2 = st.sidebar.selectbox(
 )
 
 # =========================================================
-# PLAYER FILTERS
+# PLAYERS
 # =========================================================
 
 team1_df = filtered_df[
@@ -563,15 +565,19 @@ player2 = team2_df[
 ].iloc[0]
 
 # =========================================================
-# HEADER
+# LOGOS
 # =========================================================
 
 logo1 = get_logo(player1["Team"])
 logo2 = get_logo(player2["Team"])
 
-h1, h2, h3 = st.columns([5,1,5])
+# =========================================================
+# HEADER
+# =========================================================
 
-with h1:
+c1, c2, c3 = st.columns([5,1,5])
+
+with c1:
 
     if logo1:
 
@@ -593,20 +599,20 @@ with h1:
         unsafe_allow_html=True
     )
 
-with h2:
+with c2:
 
     st.markdown("""
 <div style="
-font-size:54px;
+font-size:60px;
 font-weight:900;
 text-align:center;
-margin-top:70px;
+margin-top:80px;
 ">
 VS
 </div>
 """, unsafe_allow_html=True)
 
-with h3:
+with c3:
 
     if logo2:
 
@@ -629,21 +635,19 @@ with h3:
     )
 
 # =========================================================
+# SKILL TITLE
+# =========================================================
+
+st.markdown(
+    '<div class="skill-title">Skill Comparison</div>',
+    unsafe_allow_html=True
+)
+
+# =========================================================
 # SKILLS
 # =========================================================
 
-st.markdown("""
-<div style="
-font-size:32px;
-font-weight:800;
-margin-top:20px;
-margin-bottom:20px;
-">
-Skill Comparison
-</div>
-""", unsafe_allow_html=True)
-
-left, space, right = st.columns([5,1,5])
+left, middle, right = st.columns([5,1,5])
 
 skills = [
 
