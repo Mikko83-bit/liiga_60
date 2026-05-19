@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# FINAL CORRECTED VERSION
+# NO CORSI VERSION
 # =========================================================
 
 import streamlit as st
@@ -161,8 +161,7 @@ def load_data():
         "Penalties",
         "Plus_minus_Total",
         "Team_xG_when_on_ice",
-        "Opponents_xG_when_on_ice",
-        "CORSI_for_perc"
+        "Opponents_xG_when_on_ice"
 
     ]
 
@@ -244,22 +243,6 @@ def load_data():
     ) * 60
 
     # =====================================================
-    # CORSI DIFFERENTIAL
-    # =====================================================
-
-    # DATA IS 0.55 = 55%
-
-    df["CorsiDiff"] = (
-
-        (df["CORSI_for_perc"] * 100)
-
-        -
-
-        50
-
-    )
-
-    # =====================================================
     # xGF / xGA
     # =====================================================
 
@@ -318,10 +301,6 @@ def load_data():
 
         +
 
-        0.05 * df.loc[forwards, "CorsiDiff"]
-
-        +
-
         0.15 * df.loc[forwards, "PlusMinus60"]
 
         +
@@ -355,10 +334,6 @@ def load_data():
         +
 
         0.15 * df.loc[defense, "PenaltyDiff60"]
-
-        +
-
-        0.05 * df.loc[defense, "CorsiDiff"]
 
         +
 
@@ -557,7 +532,7 @@ with m4:
     st.metric("PenaltyDiff/60", round(player["PenaltyDiff60"], 2))
 
 with m5:
-    st.metric("CorsiDiff", round(player["CorsiDiff"], 2))
+    st.metric("xGF/60", round(player["xGF60"], 2))
 
 with m6:
     st.metric("GameScore", round(player["GameScore"], 2))
