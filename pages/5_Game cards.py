@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA PLAYER COMPARISON CARDS
-# FINAL FIXED VERSION
+# SIDEBAR FILTER VERSION
 # =========================================================
 
 import streamlit as st
@@ -18,16 +18,16 @@ st.set_page_config(
 )
 
 # =========================================================
-# TITLE
-# =========================================================
-
-st.title("🏒 Liiga Skill Comparison")
-
-# =========================================================
 # FILE
 # =========================================================
 
 FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+
+# =========================================================
+# TITLE
+# =========================================================
+
+st.title("🏒 Liiga Skill Comparison")
 
 # =========================================================
 # CLEAN COLUMNS
@@ -106,7 +106,7 @@ def get_color(value):
         return "#efb1b1"
 
 # =========================================================
-# COMPACT SKILL CARD
+# SKILL CARD
 # =========================================================
 
 def skill_card(skill, value):
@@ -124,7 +124,7 @@ border-radius:8px;
 margin-bottom:12px;
 text-align:center;
 color:black;
-height:110px;
+height:105px;
 display:flex;
 flex-direction:column;
 justify-content:center;
@@ -139,7 +139,7 @@ margin-bottom:2px;
 </div>
 
 <div style="
-font-size:36px;
+font-size:34px;
 font-weight:900;
 line-height:1;
 ">
@@ -175,11 +175,12 @@ def load_data():
     df = clean_columns(df)
 
     # =====================================================
-    # NUMERIC COLUMNS
+    # NUMERIC
     # =====================================================
 
     numeric_cols = [
 
+        "Games",
         "Goals",
         "Assists",
         "First_assist",
@@ -214,14 +215,6 @@ def load_data():
     # =====================================================
 
     df["TOI"] = df["Time_on_ice"]
-
-    # =====================================================
-    # FILTER LOW SAMPLE
-    # =====================================================
-
-    df = df[
-        df["TOI"] >= 300
-    ].copy()
 
     # =====================================================
     # PER60
@@ -272,7 +265,7 @@ def load_data():
     ) * 60
 
     # =====================================================
-    # SHOOTING
+    # RAW SCORES
     # =====================================================
 
     df["ShootingRaw"] = (
@@ -289,10 +282,6 @@ def load_data():
 
     )
 
-    # =====================================================
-    # PLAYMAKING
-    # =====================================================
-
     df["PlaymakingRaw"] = (
 
         0.50 * df["Assists60"]
@@ -306,10 +295,6 @@ def load_data():
         0.20 * df["Accurate_passes_perc"]
 
     )
-
-    # =====================================================
-    # TRANSITION
-    # =====================================================
 
     df["TransitionRaw"] = (
 
@@ -329,10 +314,6 @@ def load_data():
 
     )
 
-    # =====================================================
-    # PUCK MOVEMENT
-    # =====================================================
-
     df["PuckMovementRaw"] = (
 
         0.50 * df["Puck_touches"]
@@ -343,10 +324,6 @@ def load_data():
 
     )
 
-    # =====================================================
-    # DEFENSE
-    # =====================================================
-
     df["DefenseRaw"] = (
 
         0.50 * df["Takeaways60"]
@@ -356,10 +333,6 @@ def load_data():
         0.50 * df["xGA60"]
 
     )
-
-    # =====================================================
-    # IMPACT
-    # =====================================================
 
     df["ImpactRaw"] = (
 
@@ -376,7 +349,7 @@ def load_data():
     )
 
     # =====================================================
-    # CATEGORY SCORES
+    # PERCENTILES
     # =====================================================
 
     categories = [
@@ -397,7 +370,7 @@ def load_data():
         )
 
     # =====================================================
-    # OVERALL SCORE
+    # OVERALL
     # =====================================================
 
     forwards = df["Position"] == "F"
@@ -457,32 +430,95 @@ def load_data():
 df = load_data()
 
 # =========================================================
-# PLAYER SELECT
+# SIDEBAR FILTERS
 # =========================================================
 
-c1, c2 = st.columns(2)
+st.sidebar.header("Filters")
 
-with c1:
+min_toi = st.sidebar.slider(
+    "Minimum TOI",
+    0,
+    2000,
+    200
+)
 
-    player1_name = st.selectbox(
-        "Player 1",
-        sorted(df["Player"].unique())
-    )
+min_games = st.sidebar.slider(
+    "Minimum Games",
+    0,
+    60,
+    5
+)
 
-with c2:
+position_filter = st.sidebar.selectbox(
+    "Position",
+    ["All", "F", "D"]
+)
 
-    player2_name = st.selectbox(
-        "Player 2",
-        sorted(df["Player"].unique()),
-        index=1
-    )
+# =========================================================
+# APPLY FILTERS
+# =========================================================
 
-player1 = df[
-    df["Player"] == player1_name
+filtered_df = df.copy()
+
+filtered_df = filtered_df[
+    filtered_df["TOI"] >= min_toi
+]
+
+filtered_df = filtered_df[
+    filtered_df["Games"] >= min_games
+]
+
+if position_filter != "All":
+
+    filtered_df = filtered_df[
+        filtered_df["Position"] == position_filter
+    ]
+
+# =========================================================
+# TEAM FILTERS
+# =========================================================
+
+teams = sorted(filtered_df["Team"].unique())
+
+team1 = st.sidebar.selectbox(
+    "Team 1",
+    teams
+)
+
+team2 = st.sidebar.selectbox(
+    "Team 2",
+    teams,
+    index=min(1, len(teams)-1)
+)
+
+team1_df = filtered_df[
+    filtered_df["Team"] == team1
+]
+
+team2_df = filtered_df[
+    filtered_df["Team"] == team2
+]
+
+# =========================================================
+# PLAYER FILTERS
+# =========================================================
+
+player1_name = st.sidebar.selectbox(
+    "Player 1",
+    sorted(team1_df["Player"].unique())
+)
+
+player2_name = st.sidebar.selectbox(
+    "Player 2",
+    sorted(team2_df["Player"].unique())
+)
+
+player1 = team1_df[
+    team1_df["Player"] == player1_name
 ].iloc[0]
 
-player2 = df[
-    df["Player"] == player2_name
+player2 = team2_df[
+    team2_df["Player"] == player2_name
 ].iloc[0]
 
 # =========================================================
@@ -494,30 +530,30 @@ h1, h2, h3 = st.columns([5,1,5])
 with h1:
 
     st.markdown(f"""
-## {player1['Player']}
+# {player1['Player']}
 
-{player1['Team']} | {player1['Position']}
+### {player1['Team']} | {player1['Position']}
 """)
 
 with h2:
 
-    st.markdown("## VS")
+    st.markdown("# VS")
 
 with h3:
 
     st.markdown(f"""
-## {player2['Player']}
+# {player2['Player']}
 
-{player2['Team']} | {player2['Position']}
+### {player2['Team']} | {player2['Position']}
 """)
 
 # =========================================================
-# SKILLS
+# SKILL COMPARISON
 # =========================================================
 
 st.markdown("## Skill Comparison")
 
-left, gap, right = st.columns([5,0.5,5])
+left, spacer, right = st.columns([5,1,5])
 
 skills = [
 
@@ -559,13 +595,13 @@ o1, o2 = st.columns(2)
 with o1:
 
     st.metric(
-        "Overall",
+        f"{player1['Player']} Overall",
         round(player1["OverallScore"], 1)
     )
 
 with o2:
 
     st.metric(
-        "Overall",
+        f"{player2['Player']} Overall",
         round(player2["OverallScore"], 1)
     )
