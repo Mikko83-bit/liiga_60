@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA PLAYER COMPARISON CARDS
-# FIXED VERSION
+# FULLY FIXED VERSION
 # =========================================================
 
 import streamlit as st
@@ -60,7 +60,7 @@ def clean_columns(df):
     return df
 
 # =========================================================
-# PERCENTILE SCORE
+# PERCENTILE
 # =========================================================
 
 def percentile_score(series):
@@ -70,7 +70,7 @@ def percentile_score(series):
     )
 
 # =========================================================
-# LABELS
+# LABEL
 # =========================================================
 
 def get_label(value):
@@ -91,7 +91,7 @@ def get_label(value):
         return "BELOW AVG"
 
 # =========================================================
-# COLORS
+# COLOR
 # =========================================================
 
 def get_color(value):
@@ -115,46 +115,42 @@ def skill_box(skill, value):
 
     label = get_label(value)
 
-    html = f"""
-
-    <div style="
-        background-color:{color};
-        padding:18px;
-        border-radius:10px;
-        margin-bottom:22px;
-        text-align:center;
-        color:black;
-        font-weight:bold;
-    ">
-
-        <div style="
-            font-size:16px;
-            margin-bottom:4px;
-        ">
-            {skill}
-        </div>
-
-        <div style="
-            font-size:52px;
-            line-height:1;
-        ">
-            {int(value)}
-        </div>
-
-        <div style="
-            font-size:13px;
-            letter-spacing:1px;
-            margin-top:4px;
-        ">
-            {label}
-        </div>
-
-    </div>
-
-    """
-
     st.markdown(
-        html,
+        f"""
+<div style='
+background-color:{color};
+padding:20px;
+border-radius:10px;
+margin-bottom:24px;
+text-align:center;
+color:black;
+font-weight:bold;
+'>
+
+<div style='
+font-size:16px;
+margin-bottom:4px;
+'>
+{skill}
+</div>
+
+<div style='
+font-size:52px;
+line-height:1;
+'>
+{int(value)}
+</div>
+
+<div style='
+font-size:13px;
+letter-spacing:1px;
+margin-top:4px;
+'>
+{label}
+</div>
+
+</div>
+""",
         unsafe_allow_html=True
     )
 
@@ -213,7 +209,7 @@ def load_data():
     df["TOI"] = df["Time_on_ice"]
 
     # =====================================================
-    # MINIMUM SAMPLE
+    # FILTER SAMPLE
     # =====================================================
 
     df = df[
@@ -233,11 +229,17 @@ def load_data():
         ) * 60
 
     df["Goals60"] = per60("Goals")
+
     df["Assists60"] = per60("Assists")
+
     df["FirstAssist60"] = per60("First_assist")
+
     df["Shots60"] = per60("Shots")
+
     df["Entries60"] = per60("Entries")
+
     df["Breakouts60"] = per60("Breakouts")
+
     df["Takeaways60"] = per60("Takeaways")
 
     # =====================================================
@@ -361,7 +363,7 @@ def load_data():
     )
 
     # =====================================================
-    # PERCENTILE SCORES
+    # SCORES
     # =====================================================
 
     categories = [
@@ -384,7 +386,7 @@ def load_data():
         )
 
     # =====================================================
-    # OVERALL SCORE
+    # OVERALL
     # =====================================================
 
     forwards = df["Position"] == "F"
@@ -438,7 +440,7 @@ def load_data():
     return df
 
 # =========================================================
-# LOAD DATA
+# LOAD
 # =========================================================
 
 df = load_data()
@@ -453,8 +455,7 @@ with col1:
 
     player1_name = st.selectbox(
         "Player 1",
-        sorted(df["Player"].unique()),
-        index=0
+        sorted(df["Player"].unique())
     )
 
 with col2:
@@ -477,27 +478,27 @@ player2 = df[
 # HEADER
 # =========================================================
 
-c1, c2, c3 = st.columns([4,1,4])
+c1, c2, c3 = st.columns([5,1,5])
 
 with c1:
 
     st.markdown(f"""
-    ## {player1['Player']}
+# {player1['Player']}
 
-    {player1['Team']} | {player1['Position']}
-    """)
+### {player1['Team']} | {player1['Position']}
+""")
 
 with c2:
 
-    st.markdown("## VS")
+    st.markdown("# VS")
 
 with c3:
 
     st.markdown(f"""
-    ## {player2['Player']}
+# {player2['Player']}
 
-    {player2['Team']} | {player2['Position']}
-    """)
+### {player2['Team']} | {player2['Position']}
+""")
 
 # =========================================================
 # SKILL COMPARISON
@@ -505,7 +506,7 @@ with c3:
 
 st.markdown("## Skill Comparison")
 
-left, spacer, right = st.columns([5,1,5])
+left, space, right = st.columns([5,1,5])
 
 skills = [
 
@@ -537,7 +538,7 @@ with right:
         )
 
 # =========================================================
-# OVERALL
+# OVERALL SCORES
 # =========================================================
 
 st.divider()
