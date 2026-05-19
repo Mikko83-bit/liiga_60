@@ -74,7 +74,7 @@ def load_data():
 
     players = pd.read_excel(
         FILE,
-        sheet_name="Players"
+        sheet_name="Skaters"
     )
 
     teams = pd.read_excel(
