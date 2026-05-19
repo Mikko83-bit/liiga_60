@@ -1,27 +1,95 @@
 # =========================================================
-# LIIGA PLAYER COMPARISON CARDS
-# FULL FILTER VERSION
+# SDHL / LIIGA PLAYER COMPARISON
+# CLEAN HOCKEYSTATCARDS STYLE
 # =========================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
 
 # =========================================================
 # PAGE
 # =========================================================
 
 st.set_page_config(
-    page_title="Liiga Skill Cards",
+    page_title="Player Comparison",
     page_icon="🏒",
     layout="wide"
 )
 
 # =========================================================
+# CSS
+# =========================================================
+
+st.markdown("""
+<style>
+
+.block-container{
+    padding-top:2rem;
+    max-width:1450px;
+}
+
+html, body, [class*="css"] {
+    background-color:#030817;
+    color:white;
+    font-family:Arial;
+}
+
+/* remove top spacing */
+div[data-testid="stVerticalBlock"]{
+    gap:0.7rem;
+}
+
+/* sidebar */
+section[data-testid="stSidebar"]{
+    background:#111827;
+}
+
+/* metric cards */
+.skill-card{
+    border-radius:12px;
+    padding:16px;
+    text-align:center;
+    margin-bottom:16px;
+    height:105px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+}
+
+/* title */
+.main-title{
+    font-size:52px;
+    font-weight:900;
+    margin-bottom:10px;
+}
+
+/* player names */
+.player-name{
+    font-size:32px;
+    font-weight:800;
+    margin-top:8px;
+}
+
+/* subtitle */
+.player-sub{
+    font-size:20px;
+    color:#d1d5db;
+    margin-bottom:20px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
 # TITLE
 # =========================================================
 
-st.title("🏒 Liiga Skill Comparison")
+st.markdown(
+    '<div class="main-title">🏒 SDHL Player Comparison</div>',
+    unsafe_allow_html=True
+)
 
 # =========================================================
 # FILE
@@ -35,7 +103,7 @@ FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 def clean_columns(df):
 
-    cleaned = []
+    cols = []
 
     for col in df.columns:
 
@@ -53,9 +121,9 @@ def clean_columns(df):
         col = col.replace(".", "")
         col = col.replace("'", "")
 
-        cleaned.append(col)
+        cols.append(col)
 
-    df.columns = cleaned
+    df.columns = cols
 
     return df
 
@@ -65,12 +133,10 @@ def clean_columns(df):
 
 def percentile(series):
 
-    return (
-        series.rank(pct=True) * 100
-    )
+    return series.rank(pct=True) * 100
 
 # =========================================================
-# LABEL
+# LABELS
 # =========================================================
 
 def get_label(value):
@@ -87,11 +153,10 @@ def get_label(value):
     elif value >= 40:
         return "AVERAGE"
 
-    else:
-        return "BELOW AVG"
+    return "BELOW AVG"
 
 # =========================================================
-# COLOR
+# COLORS
 # =========================================================
 
 def get_color(value):
@@ -102,8 +167,21 @@ def get_color(value):
     elif value >= 40:
         return "#b7d3ea"
 
-    else:
-        return "#efb1b1"
+    return "#efb1b1"
+
+# =========================================================
+# LOGOS
+# =========================================================
+
+def get_logo(team):
+
+    path = f"logos/{team}.png"
+
+    if os.path.exists(path):
+
+        return path
+
+    return None
 
 # =========================================================
 # CARD
@@ -117,29 +195,22 @@ def skill_card(skill, value):
 
     st.markdown(
         f"""
-<div style="
+<div class="skill-card"
+style="
 background:{color};
-padding:12px;
-border-radius:8px;
-margin-bottom:12px;
-text-align:center;
 color:black;
-height:105px;
-display:flex;
-flex-direction:column;
-justify-content:center;
 ">
 
 <div style="
-font-size:14px;
+font-size:16px;
 font-weight:700;
-margin-bottom:2px;
+margin-bottom:6px;
 ">
 {skill}
 </div>
 
 <div style="
-font-size:34px;
+font-size:54px;
 font-weight:900;
 line-height:1;
 ">
@@ -147,10 +218,10 @@ line-height:1;
 </div>
 
 <div style="
-font-size:11px;
-letter-spacing:1px;
+font-size:13px;
 font-weight:700;
-margin-top:4px;
+letter-spacing:1px;
+margin-top:5px;
 ">
 {label}
 </div>
@@ -167,54 +238,45 @@ margin-top:4px;
 @st.cache_data
 def load_data():
 
-    df = pd.read_excel(
-        FILE,
-        sheet_name="Skaters"
-    )
+    df = pd.read_excel(FILE)
 
     df = clean_columns(df)
-
-    # =====================================================
-    # DEBUG COLUMN NAMES
-    # =====================================================
-
-    # st.write(df.columns.tolist())
 
     # =====================================================
     # FIND GAMES COLUMN
     # =====================================================
 
-    games_col = None
-
     possible_games_cols = [
 
         "Games",
         "GP",
-        "Games_played",
-        "GP_total"
+        "Games_played"
 
     ]
+
+    games_col = None
 
     for col in possible_games_cols:
 
         if col in df.columns:
 
             games_col = col
+
             break
 
-    if games_col is None:
-
-        df["Games"] = 0
-
-    else:
+    if games_col:
 
         df["Games"] = pd.to_numeric(
             df[games_col],
             errors="coerce"
         ).fillna(0)
 
+    else:
+
+        df["Games"] = 0
+
     # =====================================================
-    # NUMERIC COLUMNS
+    # NUMERIC
     # =====================================================
 
     numeric_cols = [
@@ -294,7 +356,7 @@ def load_data():
     )
 
     # =====================================================
-    # SKILL RAW SCORES
+    # RAW SCORES
     # =====================================================
 
     df["ShootingRaw"] = (
@@ -398,58 +460,6 @@ def load_data():
             df[f"{cat}Raw"]
         )
 
-    # =====================================================
-    # OVERALL SCORE
-    # =====================================================
-
-    forwards = df["Position"] == "F"
-
-    df.loc[forwards, "OverallScore"] = (
-
-        0.30 * df.loc[forwards, "ShootingScore"]
-
-        +
-
-        0.25 * df.loc[forwards, "PlaymakingScore"]
-
-        +
-
-        0.20 * df.loc[forwards, "TransitionScore"]
-
-        +
-
-        0.15 * df.loc[forwards, "DefenseScore"]
-
-        +
-
-        0.10 * df.loc[forwards, "ImpactScore"]
-
-    )
-
-    defense = df["Position"] == "D"
-
-    df.loc[defense, "OverallScore"] = (
-
-        0.15 * df.loc[defense, "ShootingScore"]
-
-        +
-
-        0.20 * df.loc[defense, "PlaymakingScore"]
-
-        +
-
-        0.25 * df.loc[defense, "TransitionScore"]
-
-        +
-
-        0.30 * df.loc[defense, "DefenseScore"]
-
-        +
-
-        0.10 * df.loc[defense, "ImpactScore"]
-
-    )
-
     return df
 
 # =========================================================
@@ -464,20 +474,12 @@ df = load_data()
 
 st.sidebar.header("Filters")
 
-# =========================================================
-# MINIMUM TOI
-# =========================================================
-
 min_toi = st.sidebar.slider(
     "Minimum TOI",
     0,
     2000,
     200
 )
-
-# =========================================================
-# MINIMUM GAMES
-# =========================================================
 
 min_games = st.sidebar.slider(
     "Minimum Games",
@@ -486,17 +488,13 @@ min_games = st.sidebar.slider(
     5
 )
 
-# =========================================================
-# POSITION
-# =========================================================
-
 position_filter = st.sidebar.selectbox(
     "Position",
     ["All", "F", "D"]
 )
 
 # =========================================================
-# APPLY FILTERS
+# FILTERS
 # =========================================================
 
 filtered_df = df.copy()
@@ -534,6 +532,10 @@ team2 = st.sidebar.selectbox(
     index=min(1, len(teams)-1)
 )
 
+# =========================================================
+# PLAYER FILTERS
+# =========================================================
+
 team1_df = filtered_df[
     filtered_df["Team"] == team1
 ]
@@ -541,10 +543,6 @@ team1_df = filtered_df[
 team2_df = filtered_df[
     filtered_df["Team"] == team2
 ]
-
-# =========================================================
-# PLAYER FILTERS
-# =========================================================
 
 player1_name = st.sidebar.selectbox(
     "Player 1",
@@ -568,35 +566,84 @@ player2 = team2_df[
 # HEADER
 # =========================================================
 
+logo1 = get_logo(player1["Team"])
+logo2 = get_logo(player2["Team"])
+
 h1, h2, h3 = st.columns([5,1,5])
 
 with h1:
 
-    st.markdown(f"""
-# {player1['Player']}
+    if logo1:
 
-### {player1['Team']} | {player1['Position']}
-""")
+        st.image(
+            logo1,
+            width=95
+        )
+
+    st.markdown(
+        f"""
+<div class="player-name">
+{player1['Player']}
+</div>
+
+<div class="player-sub">
+{player1['Team']} | {player1['Position']}
+</div>
+""",
+        unsafe_allow_html=True
+    )
 
 with h2:
 
-    st.markdown("# VS")
+    st.markdown("""
+<div style="
+font-size:54px;
+font-weight:900;
+text-align:center;
+margin-top:70px;
+">
+VS
+</div>
+""", unsafe_allow_html=True)
 
 with h3:
 
-    st.markdown(f"""
-# {player2['Player']}
+    if logo2:
 
-### {player2['Team']} | {player2['Position']}
-""")
+        st.image(
+            logo2,
+            width=95
+        )
+
+    st.markdown(
+        f"""
+<div class="player-name">
+{player2['Player']}
+</div>
+
+<div class="player-sub">
+{player2['Team']} | {player2['Position']}
+</div>
+""",
+        unsafe_allow_html=True
+    )
 
 # =========================================================
 # SKILLS
 # =========================================================
 
-st.markdown("## Skill Comparison")
+st.markdown("""
+<div style="
+font-size:32px;
+font-weight:800;
+margin-top:20px;
+margin-bottom:20px;
+">
+Skill Comparison
+</div>
+""", unsafe_allow_html=True)
 
-left, spacer, right = st.columns([5,1,5])
+left, space, right = st.columns([5,1,5])
 
 skills = [
 
@@ -626,25 +673,3 @@ with right:
             label,
             player2[col]
         )
-
-# =========================================================
-# OVERALL
-# =========================================================
-
-st.divider()
-
-o1, o2 = st.columns(2)
-
-with o1:
-
-    st.metric(
-        f"{player1['Player']} Overall",
-        round(player1["OverallScore"], 1)
-    )
-
-with o2:
-
-    st.metric(
-        f"{player2['Player']} Overall",
-        round(player2["OverallScore"], 1)
-    )
