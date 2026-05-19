@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA RELATIVE IMPACT
-# IMPROVED DEFENSIVE MODEL
+# FINAL CLEAN VERSION + LOGOS
 # pages/6_Liiga_Relative.py
 # =========================================================
 
@@ -8,6 +8,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import os
 
 # ==================================================
 # PAGE CONFIG
@@ -105,16 +106,7 @@ def load_data():
         df["Games"] = 0
 
     # ==================================================
-    # TOI
-    # ==================================================
-
-    df["TOI"] = pd.to_numeric(
-        df["Time_on_ice"],
-        errors="coerce"
-    ).fillna(0)
-
-    # ==================================================
-    # BASIC CLEAN
+    # CLEAN
     # ==================================================
 
     df["Position"] = (
@@ -128,6 +120,15 @@ def load_data():
         .astype(str)
         .str.strip()
     )
+
+    # ==================================================
+    # TOI
+    # ==================================================
+
+    df["TOI"] = pd.to_numeric(
+        df["Time_on_ice"],
+        errors="coerce"
+    ).fillna(0)
 
     # ==================================================
     # PER60 FUNCTION
@@ -148,7 +149,6 @@ def load_data():
     df["Goals60"] = per60("Goals")
     df["Assists60"] = per60("Assists")
     df["xG60"] = per60("xG")
-    df["Shots60"] = per60("Shots_on_goal")
 
     df["Entries60"] = per60("Entries")
     df["Breakouts60"] = per60("Breakouts")
@@ -173,7 +173,7 @@ def load_data():
     )
 
     # ==================================================
-    # TEAM DATA
+    # TEAM TABLE
     # ==================================================
 
     team_data = {
@@ -269,13 +269,13 @@ def load_data():
         .transform("mean")
     )
 
-    team_avg_netxg = (
-        df.groupby("Team")["NetxG"]
+    team_avg_goals = (
+        df.groupby("Team")["Goals60"]
         .transform("mean")
     )
 
-    team_avg_goals = (
-        df.groupby("Team")["Goals60"]
+    team_avg_netxg = (
+        df.groupby("Team")["NetxG"]
         .transform("mean")
     )
 
@@ -290,7 +290,7 @@ def load_data():
     )
 
     # ==================================================
-    # RELATIVE OFFENCE
+    # RELATIVE METRICS
     # ==================================================
 
     df["Relative_xGF"] = (
@@ -303,9 +303,10 @@ def load_data():
         team_avg_goals
     )
 
-    # ==================================================
-    # IMPROVED DEFENSIVE MODEL
-    # ==================================================
+    df["Relative_NetxG"] = (
+        df["NetxG"] -
+        team_avg_netxg
+    )
 
     relative_takeaways = (
         df["Takeaways60"] -
@@ -317,11 +318,6 @@ def load_data():
         team_avg_losses
     )
 
-    relative_netxg = (
-        df["NetxG"] -
-        team_avg_netxg
-    )
-
     # ==================================================
     # DEFENSE MODEL
     # ==================================================
@@ -330,14 +326,14 @@ def load_data():
 
         relative_takeaways * 0.35 +
 
-        relative_netxg * 0.45 -
+        df["Relative_NetxG"] * 0.45 -
 
         relative_losses * 0.20
 
     )
 
     # ==================================================
-    # RELATIVE IMPACT MODEL
+    # IMPACT MODEL
     # ==================================================
 
     df["Relative_Impact_Raw"] = (
@@ -346,7 +342,7 @@ def load_data():
 
         df["Defense_Raw"] * 0.30 +
 
-        relative_netxg * 0.20 +
+        df["Relative_NetxG"] * 0.20 +
 
         df["Relative_Offence"] * 0.15
 
@@ -361,6 +357,7 @@ def load_data():
         "Relative_xGF",
         "Defense_Raw",
         "Relative_Offence",
+        "Relative_NetxG",
         "Relative_Impact_Raw"
 
     ]
@@ -395,6 +392,22 @@ def load_data():
 # ==================================================
 
 df = load_data()
+
+# ==================================================
+# TEAM LOGOS
+# ==================================================
+
+def get_logo(team):
+
+    path = os.path.join(
+        "logos",
+        f"{team}.png"
+    )
+
+    if os.path.exists(path):
+        return path
+
+    return None
 
 # ==================================================
 # SIDEBAR
@@ -482,9 +495,24 @@ player = team_filtered[
 # HEADER
 # ==================================================
 
-st.markdown(
-    f"## {player['Player']} | {player['Team']} | {player['Position']}"
-)
+logo = get_logo(player["Team"])
+
+col1, col2 = st.columns([1,5])
+
+with col1:
+
+    if logo:
+        st.image(logo, width=120)
+
+with col2:
+
+    st.markdown(
+        f"""
+        ## {player['Player']}
+
+        {player['Team']} | {player['Position']}
+        """
+    )
 
 # ==================================================
 # TEAM ENVIRONMENT
@@ -554,7 +582,7 @@ with m3:
 
     st.metric(
         "Relative NetxG",
-        f"{relative_netxg.loc[player.name]:.2f}"
+        f"{player['Relative_NetxG']:.2f}"
     )
 
 with m4:
@@ -570,12 +598,13 @@ with m4:
 
 st.markdown("## Relative Percentiles")
 
-gauge_cols = st.columns(4)
+gauge_cols = st.columns(5)
 
 gauges = [
 
     ("xGF", "Relative_xGF_Pct"),
     ("Defense", "Defense_Raw_Pct"),
+    ("NetxG", "Relative_NetxG_Pct"),
     ("Offence", "Relative_Offence_Pct"),
     ("Impact", "Relative_Impact_Raw_Pct")
 
@@ -627,6 +656,7 @@ leaderboard = filtered_df[[
     "Relative_Impact_Raw_Pct",
     "Relative_xGF_Pct",
     "Defense_Raw_Pct",
+    "Relative_NetxG_Pct",
     "Relative_Offence_Pct"
 ]].sort_values(
     "Relative_Impact_Raw_Pct",
