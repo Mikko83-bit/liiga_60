@@ -525,8 +525,8 @@ st.subheader(
     f"{player['Player']} | {player['Team']} | {player['Position']}"
 )
 
-st.caption(
-    f"#{player_rank} GameScore Rank"
+st.markdown(
+    f"### #{player_rank} GameScore Rank"
 )
 
 # =========================================================
