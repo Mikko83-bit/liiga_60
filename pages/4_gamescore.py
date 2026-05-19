@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# CLEAN FIXED VERSION
+# FINAL FIXED VERSION
 # =========================================================
 
 import streamlit as st
@@ -159,7 +159,7 @@ def load_data():
         "Time_on_ice",
         "Penalties_drawn",
         "Penalties",
-        "Plusminus_Total",
+        "Plus_minus_Total",
         "Team_xG_when_on_ice",
         "Opponents_xG_when_on_ice",
         "CORSI_for_perc"
@@ -241,7 +241,7 @@ def load_data():
 
     df["PlusMinus60"] = (
 
-        df["Plusminus_Total"]
+        df["Plus_minus_Total"]
 
         /
 
