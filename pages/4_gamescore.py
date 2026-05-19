@@ -1,6 +1,6 @@
 # =========================================================
 # LIIGA GAME SCORE
-# NO CORSI VERSION
+# FINAL CLEAN VERSION
 # =========================================================
 
 import streamlit as st
@@ -181,7 +181,7 @@ def load_data():
     df["TOI"] = df["Time_on_ice"]
 
     # =====================================================
-    # FILTER LOW SAMPLE
+    # MINIMUM SAMPLE
     # =====================================================
 
     df = df[
@@ -514,10 +514,10 @@ st.plotly_chart(
 )
 
 # =========================================================
-# METRICS
+# METRICS ROW 1
 # =========================================================
 
-m1, m2, m3, m4, m5, m6 = st.columns(6)
+m1, m2, m3, m4 = st.columns(4)
 
 with m1:
     st.metric("Goals/60", round(player["Goals60"], 2))
@@ -531,8 +531,31 @@ with m3:
 with m4:
     st.metric("PenaltyDiff/60", round(player["PenaltyDiff60"], 2))
 
+# =========================================================
+# METRICS ROW 2
+# =========================================================
+
+m5, m6, m7, m8 = st.columns(4)
+
 with m5:
-    st.metric("xGF/60", round(player["xGF60"], 2))
+    st.metric("PlusMinus/60", round(player["PlusMinus60"], 2))
 
 with m6:
-    st.metric("GameScore", round(player["GameScore"], 2))
+    st.metric("xGF/60", round(player["xGF60"], 2))
+
+with m7:
+    st.metric("xGA/60", round(player["xGA60"], 2))
+
+with m8:
+    st.metric("TOI", round(player["TOI"], 1))
+
+# =========================================================
+# FINAL GAME SCORE
+# =========================================================
+
+st.divider()
+
+st.metric(
+    "Final GameScore",
+    round(player["GameScore"], 2)
+)
