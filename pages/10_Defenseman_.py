@@ -18,11 +18,16 @@ st.set_page_config(
 
 st.title("Defenseman Comparison")
 
+st.markdown("""
+Compare defensemen using role-based traits instead of
+raw boxscore production.
+""")
+
 # =========================================================
 # LOAD DATA
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 try:
 
@@ -75,7 +80,7 @@ if len(missing_columns) > 0:
     st.stop()
 
 # =========================================================
-# NUMERIC
+# NUMERIC CONVERSION
 # =========================================================
 
 numeric_columns = [
@@ -125,30 +130,36 @@ df = df[
     df["Position"] == "D"
 ]
 
+df = df.dropna(subset=["Time on ice"])
+
 df = df[
     df["Time on ice"] > 0
 ]
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR FILTERS
 # =========================================================
 
 st.sidebar.header("Filters")
 
 MIN_TOI = st.sidebar.slider(
     "Minimum TOI",
-    0,
-    1500,
-    300,
-    10
+    min_value=0,
+    max_value=1500,
+    value=300,
+    step=10
 )
 
 MIN_GP = st.sidebar.slider(
     "Minimum Games",
-    0,
-    int(df["Games played"].max()),
-    10
+    min_value=0,
+    max_value=int(df["Games played"].max()),
+    value=10
 )
+
+# =========================================================
+# APPLY FILTERS
+# =========================================================
 
 df = df[
     df["Time on ice"] >= MIN_TOI
@@ -162,7 +173,9 @@ df = df[
 # TEAMS / PLAYERS
 # =========================================================
 
-teams = sorted(df["Team"].dropna().unique())
+teams = sorted(
+    df["Team"].dropna().unique()
+)
 
 team1 = st.sidebar.selectbox(
     "Team 1",
@@ -177,11 +190,15 @@ team2 = st.sidebar.selectbox(
 )
 
 players1 = sorted(
-    df[df["Team"] == team1]["Player"].unique()
+    df[
+        df["Team"] == team1
+    ]["Player"].unique()
 )
 
 players2 = sorted(
-    df[df["Team"] == team2]["Player"].unique()
+    df[
+        df["Team"] == team2
+    ]["Player"].unique()
 )
 
 st.sidebar.markdown("---")
@@ -255,15 +272,19 @@ df["Puck Moving"] = (
 # DEFENSE
 # ---------------------------------------------------------
 
+opp_xg_reverse = (
+
+    df["Opponent's xG when on ice"].max()
+
+    - df["Opponent's xG when on ice"]
+
+)
+
 df["Defense"] = (
 
     df["Takeaways in DZ_per60"]
 
-    + (
-        df["Opponent's xG when on ice"].max()
-
-        - df["Opponent's xG when on ice"]
-    )
+    + opp_xg_reverse
 
 ) / 2
 
@@ -273,11 +294,9 @@ df["Defense"] = (
 
 df["Puck Security"] = (
 
-    (
-        df["Puck losses_per60"].max()
+    df["Puck losses_per60"].max()
 
-        - df["Puck losses_per60"]
-    )
+    - df["Puck losses_per60"]
 
 )
 
@@ -315,6 +334,17 @@ traits = [
     "Physicality",
     "Offensive Support"
 ]
+
+# =========================================================
+# CLEAN NaN / INF
+# =========================================================
+
+df = df.replace(
+    [np.inf, -np.inf],
+    np.nan
+)
+
+df = df.fillna(0)
 
 # =========================================================
 # PERCENTILES
@@ -393,6 +423,8 @@ with right:
 
 fig = go.Figure()
 
+# PLAYER 1
+
 fig.add_trace(go.Scatterpolar(
 
     r=[
@@ -413,6 +445,8 @@ fig.add_trace(go.Scatterpolar(
 
     fillcolor="rgba(0,229,255,0.30)"
 ))
+
+# PLAYER 2
 
 fig.add_trace(go.Scatterpolar(
 
@@ -460,7 +494,7 @@ st.plotly_chart(
 )
 
 # =========================================================
-# UNDERLYING TRAITS
+# UNDERLYING TRAITS TABLE
 # =========================================================
 
 st.markdown("## Underlying Traits")
@@ -470,21 +504,23 @@ rows = []
 for trait in traits:
 
     p1_val = round(
-        p1[trait],
+        float(p1[trait]),
         2
     )
 
     p2_val = round(
-        p2[trait],
+        float(p2[trait]),
         2
     )
 
     p1_pct = round(
-        p1[f"{trait}_pct"]
+        float(p1[f"{trait}_pct"]),
+        0
     )
 
     p2_pct = round(
-        p2[f"{trait}_pct"]
+        float(p2[f"{trait}_pct"]),
+        0
     )
 
     if p1_val > p2_val:
@@ -507,10 +543,10 @@ for trait in traits:
         "Trait": trait,
 
         player1:
-        f"{p1_icon} {p1_val} ({p1_pct}%)",
+        f"{p1_icon} {p1_val} ({int(p1_pct)}%)",
 
         player2:
-        f"{p2_icon} {p2_val} ({p2_pct}%)"
+        f"{p2_icon} {p2_val} ({int(p2_pct)}%)"
     })
 
 table = pd.DataFrame(rows)
@@ -519,5 +555,5 @@ st.dataframe(
     table,
     use_container_width=True,
     hide_index=True,
-    height=400
+    height=420
 )
