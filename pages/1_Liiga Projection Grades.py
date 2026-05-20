@@ -99,6 +99,7 @@ required_columns = [
     "xG",
     "Shots",
     "Passes to the slot",
+    "Pre-shots passes",
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
@@ -125,6 +126,7 @@ numeric_columns = [
     "xG",
     "Shots",
     "Passes to the slot",
+    "Pre-shots passes",
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
@@ -188,6 +190,7 @@ metrics = [
     "xG",
     "Shots",
     "Passes to the slot",
+    "Pre-shots passes",
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
@@ -240,11 +243,13 @@ base_df["Raw Projection"] = (
 
     + 0.30 * base_df["d_First assist"]
 
-    + 0.25 * base_df["d_xG"]
+    + 0.22 * base_df["d_xG"]
 
     + 0.15 * base_df["d_Shots"]
 
     + 0.15 * base_df["d_Passes to the slot"]
+
+    + 0.10 * base_df["d_Pre-shots passes"]
 
     + 0.15 * base_df["d_Team xG when on ice"]
 
@@ -263,7 +268,7 @@ base_df["TOI Factor"] = (
 ).clip(0.50, 1.50)
 
 # =========================================================
-# FINAL PROJECTION
+# FINAL PROJECTION SCORE
 # =========================================================
 
 base_df["Projection Score"] = (
@@ -665,5 +670,5 @@ st.dataframe(
     styled_table,
     use_container_width=True,
     hide_index=True,
-    height=420
+    height=470
 )
