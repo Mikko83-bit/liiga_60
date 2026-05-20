@@ -56,7 +56,7 @@ try:
 
     teams_df = pd.read_excel(
         FILE,
-        sheet_name="teams"
+        sheet_name="Teams"
     )
 
 except Exception as e:
