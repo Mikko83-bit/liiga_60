@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # =========================================================
-# STREAMLIT PAGE
+# PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
@@ -15,39 +15,52 @@ st.title("Liiga Projection Grade Model")
 
 st.write("""
 Tämä malli:
+- lukee raakadataa Excelistä
 - laskee per60-luvut
-- vertaa pelaajia liigakeskiarvoon
+- vertaa liigakeskiarvoihin
 - muodostaa projection scoren
 - muuntaa scoret 4–10 arvosanoiksi
 """)
 
 # =========================================================
-# LOAD EXCEL
+# FILE UPLOADER
+# =========================================================
+
+uploaded_file = st.file_uploader(
+    "Upload Excel file",
+    type=["xlsx"]
+)
+
+if uploaded_file is None:
+
+    st.info("Upload your Liiga Excel file to continue.")
+    st.stop()
+
+# =========================================================
+# READ EXCEL
 # =========================================================
 
 try:
 
-    df = pd.read_excel(
-        "../Liiga 2025-2026_skaters_teams.xlsx"
-    )
+    df = pd.read_excel(uploaded_file)
 
 except Exception as e:
 
-    st.error(f"Excelin lataus epäonnistui: {e}")
+    st.error(f"Excel loading failed: {e}")
     st.stop()
 
 # =========================================================
-# NÄYTÄ SARAKKEET DEBUGIA VARTEN
+# SHOW COLUMNS
 # =========================================================
 
-with st.expander("Näytä datan sarakkeet"):
+with st.expander("Show Data Columns"):
 
     st.write(df.columns.tolist())
 
 # =========================================================
 # TOI COLUMN
 # =========================================================
-# VAIHDA TÄMÄ JOS TARPEEN
+# CHANGE IF NEEDED
 # =========================================================
 
 TOI_COLUMN = "TOI"
@@ -55,10 +68,34 @@ TOI_COLUMN = "TOI"
 if TOI_COLUMN not in df.columns:
 
     st.error(
-        f"TOI-saraketta '{TOI_COLUMN}' ei löydy datasta."
+        f"TOI column '{TOI_COLUMN}' not found."
     )
 
     st.stop()
+
+# =========================================================
+# PLAYER COLUMN
+# =========================================================
+
+possible_player_cols = [
+    "Player",
+    "Name",
+    "player",
+    "PLAYER"
+]
+
+player_col = None
+
+for col in possible_player_cols:
+
+    if col in df.columns:
+
+        player_col = col
+        break
+
+if player_col is None:
+
+    player_col = df.columns[0]
 
 # =========================================================
 # METRICS
@@ -78,7 +115,7 @@ metrics = [
 ]
 
 # =========================================================
-# TARKISTA PUUTTUVAT SARAKKEET
+# CHECK MISSING COLUMNS
 # =========================================================
 
 missing = [
@@ -89,7 +126,7 @@ missing = [
 if len(missing) > 0:
 
     st.error(
-        f"Nämä sarakkeet puuttuvat datasta: {missing}"
+        f"Missing columns: {missing}"
     )
 
     st.stop()
@@ -100,10 +137,8 @@ if len(missing) > 0:
 
 df = df.copy()
 
-# Poista rivit ilman TOI:ta
 df = df[df[TOI_COLUMN] > 0]
 
-# Täytä puuttuvat arvot nollalla
 df[metrics] = df[metrics].fillna(0)
 
 # =========================================================
@@ -142,7 +177,7 @@ for metric in metrics:
 # =========================================================
 # PROJECTION SCORE
 # =========================================================
-# VOIT MUOKATA PAINOJA MYÖHEMMIN
+# BASED ON YOUR DISCUSSION MODEL
 # =========================================================
 
 df["Projection Score"] = (
@@ -168,7 +203,7 @@ df["Projection Score"] = (
 )
 
 # =========================================================
-# PERCENTILE
+# PERCENTILES
 # =========================================================
 
 df["Percentile"] = (
@@ -177,7 +212,7 @@ df["Percentile"] = (
 ) * 100
 
 # =========================================================
-# GRADE 4-10
+# 4-10 GRADE
 # =========================================================
 
 df["Grade"] = (
@@ -194,16 +229,8 @@ df = df.sort_values(
 )
 
 # =========================================================
-# PLAYER SELECT
+# PLAYER SELECTOR
 # =========================================================
-
-if "Player" in df.columns:
-
-    player_col = "Player"
-
-else:
-
-    player_col = df.columns[0]
 
 player = st.selectbox(
     "Select Player",
@@ -215,7 +242,7 @@ player_df = df[
 ]
 
 # =========================================================
-# PLAYER CARD
+# PLAYER OVERVIEW
 # =========================================================
 
 st.subheader(player)
@@ -255,29 +282,33 @@ with col3:
 
 st.subheader("Underlying Metrics")
 
-display_metrics = pd.DataFrame({
+metric_table = pd.DataFrame({
 
     "Metric": metrics,
 
     "Per60": [
+
         round(
             player_df[f"{m}_per60"].iloc[0],
             2
         )
+
         for m in metrics
     ],
 
     "Delta vs League": [
+
         round(
             player_df[f"d_{m}"].iloc[0],
             2
         )
+
         for m in metrics
     ]
 })
 
 st.dataframe(
-    display_metrics,
+    metric_table,
     use_container_width=True
 )
 
@@ -287,7 +318,7 @@ st.dataframe(
 
 st.subheader("All Players")
 
-show_cols = [
+table_cols = [
     player_col,
     "Projection Score",
     "Percentile",
@@ -295,7 +326,7 @@ show_cols = [
 ]
 
 st.dataframe(
-    df[show_cols],
+    df[table_cols],
     use_container_width=True,
     height=700
 )
