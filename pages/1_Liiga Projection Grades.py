@@ -62,9 +62,6 @@ required_columns = [
     "xG",
     "Shots",
     "Passes to the slot",
-    "Entries",
-    "Takeaways",
-    "Puck losses",
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
@@ -91,9 +88,6 @@ numeric_columns = [
     "xG",
     "Shots",
     "Passes to the slot",
-    "Entries",
-    "Takeaways",
-    "Puck losses",
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
@@ -165,15 +159,11 @@ metrics = [
     "xG",
     "Shots",
     "Passes to the slot",
-    "Entries",
-    "Takeaways",
-    "Puck losses",
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
 
 negative_metrics = [
-    "Puck losses",
     "Opponent's xG when on ice"
 ]
 
@@ -201,7 +191,7 @@ for metric in metrics:
     )
 
 # =========================================================
-# DELTA METRICS
+# DELTA VS LEAGUE
 # =========================================================
 
 for metric in metrics:
@@ -217,23 +207,19 @@ for metric in metrics:
 
 base_df["Projection Score"] = (
 
-    0.30 * base_df["d_Goals"]
+    0.35 * base_df["d_Goals"]
 
-    + 0.25 * base_df["d_First assist"]
+    + 0.30 * base_df["d_First assist"]
 
-    + 0.20 * base_df["d_xG"]
+    + 0.25 * base_df["d_xG"]
 
-    + 0.10 * base_df["d_Passes to the slot"]
+    + 0.15 * base_df["d_Shots"]
 
-    + 0.10 * base_df["d_Entries"]
+    + 0.15 * base_df["d_Passes to the slot"]
 
-    + 0.10 * base_df["d_Takeaways"]
+    + 0.15 * base_df["d_Team xG when on ice"]
 
-    - 0.15 * base_df["d_Puck losses"]
-
-    + 0.20 * base_df["d_Team xG when on ice"]
-
-    - 0.20 * base_df["d_Opponent's xG when on ice"]
+    - 0.10 * base_df["d_Opponent's xG when on ice"]
 
 )
 
@@ -523,7 +509,7 @@ st.plotly_chart(
 )
 
 # =========================================================
-# UNDERLYING METRICS TABLE
+# UNDERLYING METRICS
 # =========================================================
 
 st.subheader("Underlying Metrics")
@@ -595,5 +581,5 @@ st.dataframe(
     metric_table,
     use_container_width=True,
     hide_index=True,
-    height=450
+    height=420
 )
