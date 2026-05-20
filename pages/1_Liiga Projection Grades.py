@@ -8,20 +8,20 @@ import plotly.graph_objects as go
 # =========================================================
 
 st.set_page_config(
-    page_title="Liiga Projection Grades",
+    page_title="Liiga Projection Model",
     layout="wide"
 )
 
 st.title("Liiga Projection Grade Model")
 
 st.write("""
-Model:
-- Reads Liiga raw Excel data
-- Calculates per60 metrics
-- Uses league-relative deltas
-- Builds weighted projection score
-- Converts scores to 4–10 grades
-- Includes player comparison spider chart
+Model logic:
+1. Raw data
+2. Per60 metrics
+3. League-relative delta metrics
+4. Weighted projection score
+5. Percentile
+6. Grade (4-10)
 """)
 
 # =========================================================
@@ -35,7 +35,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is None:
 
-    st.info("Upload your Excel file.")
+    st.info("Upload Excel file to continue.")
     st.stop()
 
 # =========================================================
@@ -104,10 +104,15 @@ df = df.dropna(subset=["Time on ice"])
 df = df[df["Time on ice"] > 0]
 
 # =========================================================
-# MINIMUM TOI FILTER
+# MINIMUM TOI
 # =========================================================
 
-MIN_TOI = 200
+MIN_TOI = st.sidebar.slider(
+    "Minimum TOI",
+    0,
+    1000,
+    200
+)
 
 df = df[df["Time on ice"] >= MIN_TOI]
 
@@ -208,7 +213,7 @@ df["Percentile"] = (
 ) * 100
 
 # =========================================================
-# GRADE 4-10
+# 4-10 GRADE
 # =========================================================
 
 df["Grade"] = (
@@ -216,65 +221,28 @@ df["Grade"] = (
 ).round(1)
 
 # =========================================================
-# ATTRIBUTE GRADES
+# METRIC PERCENTILES
 # =========================================================
 
-df["Scoring"] = (
-    (
-        df["Goals_per60"].rank(pct=True)
-        +
-        df["xG_per60"].rank(pct=True)
-        +
-        df["Shots_per60"].rank(pct=True)
-    ) / 3
-) * 6 + 4
-
-df["Playmaking"] = (
-    (
-        df["First assist_per60"].rank(pct=True)
-        +
-        df["Passes to the slot_per60"].rank(pct=True)
-    ) / 2
-) * 6 + 4
-
-df["Transition"] = (
-    df["Entries_per60"].rank(pct=True)
-) * 6 + 4
-
-df["Defense"] = (
-    (
-        df["Takeaways_per60"].rank(pct=True)
-        +
-        (
-            1 -
-            df["Opponent's xG when on ice_per60"]
-            .rank(pct=True)
-        )
-    ) / 2
-) * 6 + 4
-
-df["Puck Management"] = (
-    (
-        1 -
-        df["Puck losses_per60"].rank(pct=True)
-    )
-) * 6 + 4
-
-# =========================================================
-# ROUND ATTRIBUTE GRADES
-# =========================================================
-
-attribute_cols = [
-    "Scoring",
-    "Playmaking",
-    "Transition",
-    "Defense",
-    "Puck Management"
+negative_metrics = [
+    "Puck losses",
+    "Opponent's xG when on ice"
 ]
 
-for col in attribute_cols:
+for metric in metrics:
 
-    df[col] = df[col].round(1)
+    if metric in negative_metrics:
+
+        df[f"{metric}_pct"] = (
+            1 -
+            df[f"{metric}_per60"].rank(pct=True)
+        ) * 100
+
+    else:
+
+        df[f"{metric}_pct"] = (
+            df[f"{metric}_per60"].rank(pct=True)
+        ) * 100
 
 # =========================================================
 # SIDEBAR FILTERS
@@ -282,7 +250,7 @@ for col in attribute_cols:
 
 st.sidebar.header("Filters")
 
-# Team
+# Team filter
 teams = sorted(df["Team"].dropna().unique())
 
 selected_team = st.sidebar.selectbox(
@@ -290,7 +258,7 @@ selected_team = st.sidebar.selectbox(
     ["All Teams"] + teams
 )
 
-# Position
+# Position filter
 positions = sorted(df["Position"].dropna().unique())
 
 selected_position = st.sidebar.selectbox(
@@ -365,6 +333,14 @@ with col1:
         )
     )
 
+    st.metric(
+        "Percentile",
+        round(
+            p1["Percentile"],
+            1
+        )
+    )
+
 with col2:
 
     st.subheader(player2)
@@ -382,16 +358,29 @@ with col2:
         )
     )
 
+    st.metric(
+        "Percentile",
+        round(
+            p2["Percentile"],
+            1
+        )
+    )
+
 # =========================================================
 # SPIDER CHART
 # =========================================================
 
-categories = [
-    "Scoring",
-    "Playmaking",
-    "Transition",
-    "Defense",
-    "Puck Management"
+spider_metrics = [
+    "Goals",
+    "First assist",
+    "xG",
+    "Shots",
+    "Passes to the slot",
+    "Entries",
+    "Takeaways",
+    "Puck losses",
+    "Team xG when on ice",
+    "Opponent's xG when on ice"
 ]
 
 fig = go.Figure()
@@ -399,10 +388,11 @@ fig = go.Figure()
 fig.add_trace(go.Scatterpolar(
 
     r=[
-        p1[c] for c in categories
+        p1[f"{m}_pct"]
+        for m in spider_metrics
     ],
 
-    theta=categories,
+    theta=spider_metrics,
 
     fill='toself',
 
@@ -412,10 +402,11 @@ fig.add_trace(go.Scatterpolar(
 fig.add_trace(go.Scatterpolar(
 
     r=[
-        p2[c] for c in categories
+        p2[f"{m}_pct"]
+        for m in spider_metrics
     ],
 
-    theta=categories,
+    theta=spider_metrics,
 
     fill='toself',
 
@@ -428,13 +419,13 @@ fig.update_layout(
 
         radialaxis=dict(
             visible=True,
-            range=[4, 10]
+            range=[0, 100]
         )
     ),
 
     showlegend=True,
 
-    height=700
+    height=800
 )
 
 st.plotly_chart(
@@ -443,25 +434,58 @@ st.plotly_chart(
 )
 
 # =========================================================
-# PLAYER DATA TABLE
+# UNDERLYING METRICS TABLE
 # =========================================================
 
-st.subheader("Player Comparison")
+st.subheader("Underlying Metrics")
 
-comparison_df = pd.DataFrame({
+metric_table = pd.DataFrame({
 
-    "Attribute": categories,
+    "Metric": spider_metrics,
 
-    player1: [
-        p1[c] for c in categories
+    f"{player1} Per60": [
+
+        round(
+            p1[f"{m}_per60"],
+            2
+        )
+
+        for m in spider_metrics
     ],
 
-    player2: [
-        p2[c] for c in categories
+    f"{player2} Per60": [
+
+        round(
+            p2[f"{m}_per60"],
+            2
+        )
+
+        for m in spider_metrics
+    ],
+
+    f"{player1} Percentile": [
+
+        round(
+            p1[f"{m}_pct"],
+            1
+        )
+
+        for m in spider_metrics
+    ],
+
+    f"{player2} Percentile": [
+
+        round(
+            p2[f"{m}_pct"],
+            1
+        )
+
+        for m in spider_metrics
     ]
 })
 
 st.dataframe(
-    comparison_df,
-    use_container_width=True
+    metric_table,
+    use_container_width=True,
+    height=600
 )
