@@ -19,8 +19,7 @@ st.set_page_config(
 st.title("Defenseman Comparison")
 
 st.markdown("""
-Compare defensemen using role-based traits instead of
-raw boxscore production.
+Compare defensemen using real underlying metrics.
 """)
 
 # =========================================================
@@ -54,19 +53,15 @@ required_columns = [
     "Position",
     "Games played",
     "Time on ice",
-    "Goals",
-    "First assist",
     "Entries",
     "Breakouts",
     "Entries via pass",
     "Breakouts via pass",
-    "Takeaways",
     "Takeaways in DZ",
     "Puck losses",
     "Puck battles won, %",
     "Team xG when on ice",
-    "Opponent's xG when on ice",
-    "Date of birth"
+    "Opponent's xG when on ice"
 ]
 
 missing_columns = [
@@ -83,22 +78,7 @@ if len(missing_columns) > 0:
 # NUMERIC CONVERSION
 # =========================================================
 
-numeric_columns = [
-    "Games played",
-    "Time on ice",
-    "Goals",
-    "First assist",
-    "Entries",
-    "Breakouts",
-    "Entries via pass",
-    "Breakouts via pass",
-    "Takeaways",
-    "Takeaways in DZ",
-    "Puck losses",
-    "Puck battles won, %",
-    "Team xG when on ice",
-    "Opponent's xG when on ice"
-]
+numeric_columns = required_columns[4:]
 
 for col in numeric_columns:
 
@@ -106,21 +86,6 @@ for col in numeric_columns:
         df[col],
         errors="coerce"
     )
-
-# =========================================================
-# AGE
-# =========================================================
-
-df["Date of birth"] = pd.to_datetime(
-    df["Date of birth"],
-    errors="coerce"
-)
-
-today = pd.Timestamp.today()
-
-df["Age"] = (
-    (today - df["Date of birth"]).dt.days / 365.25
-).round(1)
 
 # =========================================================
 # FILTER DEFENSEMEN
@@ -137,29 +102,25 @@ df = df[
 ]
 
 # =========================================================
-# SIDEBAR FILTERS
+# SIDEBAR
 # =========================================================
 
 st.sidebar.header("Filters")
 
 MIN_TOI = st.sidebar.slider(
     "Minimum TOI",
-    min_value=0,
-    max_value=1500,
-    value=300,
-    step=10
+    0,
+    1500,
+    300,
+    10
 )
 
 MIN_GP = st.sidebar.slider(
     "Minimum Games",
-    min_value=0,
-    max_value=int(df["Games played"].max()),
-    value=10
+    0,
+    int(df["Games played"].max()),
+    10
 )
-
-# =========================================================
-# APPLY FILTERS
-# =========================================================
 
 df = df[
     df["Time on ice"] >= MIN_TOI
@@ -170,7 +131,7 @@ df = df[
 ]
 
 # =========================================================
-# TEAMS / PLAYERS
+# TEAM / PLAYER FILTERS
 # =========================================================
 
 teams = sorted(
@@ -214,7 +175,7 @@ player2 = st.sidebar.selectbox(
 )
 
 # =========================================================
-# PER60 METRICS
+# PER60
 # =========================================================
 
 per60_metrics = [
@@ -222,7 +183,6 @@ per60_metrics = [
     "Breakouts",
     "Entries via pass",
     "Breakouts via pass",
-    "Takeaways",
     "Takeaways in DZ",
     "Puck losses"
 ]
@@ -235,108 +195,77 @@ for metric in per60_metrics:
     ) * 60
 
 # =========================================================
-# TRAIT ENGINE
+# METRICS FOR DISPLAY
 # =========================================================
 
-# ---------------------------------------------------------
-# TRANSITION
-# ---------------------------------------------------------
+metrics = {
 
-df["Transition"] = (
+    "Entries":
+    "Entries_per60",
 
-    df["Entries_per60"]
+    "Breakouts":
+    "Breakouts_per60",
 
-    + df["Breakouts_per60"]
+    "Entries via pass":
+    "Entries via pass_per60",
 
-    + df["Entries via pass_per60"]
+    "Breakouts via pass":
+    "Breakouts via pass_per60",
 
-    + df["Breakouts via pass_per60"]
+    "DZ Takeaways":
+    "Takeaways in DZ_per60",
 
-) / 4
+    "Puck losses":
+    "Puck losses_per60",
 
-# ---------------------------------------------------------
-# PUCK MOVING
-# ---------------------------------------------------------
+    "Battle win %":
+    "Puck battles won, %",
 
-df["Puck Moving"] = (
+    "Team xG":
+    "Team xG when on ice",
 
-    df["Breakouts via pass_per60"]
-
-    + df["Entries via pass_per60"]
-
-    + df["Team xG when on ice"]
-
-) / 3
-
-# ---------------------------------------------------------
-# DEFENSE
-# ---------------------------------------------------------
-
-opp_xg_reverse = (
-
-    df["Opponent's xG when on ice"].max()
-
-    - df["Opponent's xG when on ice"]
-
-)
-
-df["Defense"] = (
-
-    df["Takeaways in DZ_per60"]
-
-    + opp_xg_reverse
-
-) / 2
-
-# ---------------------------------------------------------
-# PUCK SECURITY
-# ---------------------------------------------------------
-
-df["Puck Security"] = (
-
-    df["Puck losses_per60"].max()
-
-    - df["Puck losses_per60"]
-
-)
-
-# ---------------------------------------------------------
-# PHYSICALITY
-# ---------------------------------------------------------
-
-df["Physicality"] = (
-    df["Puck battles won, %"]
-)
-
-# ---------------------------------------------------------
-# OFFENSIVE SUPPORT
-# ---------------------------------------------------------
-
-df["Offensive Support"] = (
-
-    df["Goals"]
-
-    + df["First assist"]
-
-    + df["Team xG when on ice"]
-
-) / 3
+    "Opp xG":
+    "Opponent's xG when on ice"
+}
 
 # =========================================================
-# TRAITS
+# REVERSE METRICS
 # =========================================================
 
-traits = [
-    "Transition",
-    "Puck Moving",
-    "Defense",
-    "Puck Security",
-    "Physicality",
-    "Offensive Support"
+reverse_metrics = [
+    "Puck losses",
+    "Opp xG"
 ]
 
 # =========================================================
-# CLEAN NaN / INF
+# PERCENTILES
+# =========================================================
+
+for display_name, metric_col in metrics.items():
+
+    if display_name in reverse_metrics:
+
+        df[f"{display_name}_pct"] = (
+            (
+                df[metric_col].rank(
+                    pct=True,
+                    ascending=False
+                )
+            ) * 100
+        )
+
+    else:
+
+        df[f"{display_name}_pct"] = (
+            (
+                df[metric_col].rank(
+                    pct=True
+                )
+            ) * 100
+        )
+
+# =========================================================
+# CLEAN
 # =========================================================
 
 df = df.replace(
@@ -345,17 +274,6 @@ df = df.replace(
 )
 
 df = df.fillna(0)
-
-# =========================================================
-# PERCENTILES
-# =========================================================
-
-for trait in traits:
-
-    df[f"{trait}_pct"] = (
-        df[trait]
-        .rank(pct=True)
-    ) * 100
 
 # =========================================================
 # PLAYER DATA
@@ -382,8 +300,8 @@ with left:
     c1, c2, c3 = st.columns(3)
 
     c1.metric(
-        "Age",
-        p1["Age"]
+        "GP",
+        int(p1["Games played"])
     )
 
     c2.metric(
@@ -392,8 +310,8 @@ with left:
     )
 
     c3.metric(
-        "GP",
-        int(p1["Games played"])
+        "Team",
+        p1["Team"]
     )
 
 with right:
@@ -403,8 +321,8 @@ with right:
     c1, c2, c3 = st.columns(3)
 
     c1.metric(
-        "Age",
-        p2["Age"]
+        "GP",
+        int(p2["Games played"])
     )
 
     c2.metric(
@@ -413,13 +331,15 @@ with right:
     )
 
     c3.metric(
-        "GP",
-        int(p2["Games played"])
+        "Team",
+        p2["Team"]
     )
 
 # =========================================================
 # SPIDERWEB
 # =========================================================
+
+spider_metrics = list(metrics.keys())
 
 fig = go.Figure()
 
@@ -428,11 +348,11 @@ fig = go.Figure()
 fig.add_trace(go.Scatterpolar(
 
     r=[
-        p1[f"{trait}_pct"]
-        for trait in traits
+        p1[f"{m}_pct"]
+        for m in spider_metrics
     ],
 
-    theta=traits,
+    theta=spider_metrics,
 
     fill='toself',
 
@@ -451,11 +371,11 @@ fig.add_trace(go.Scatterpolar(
 fig.add_trace(go.Scatterpolar(
 
     r=[
-        p2[f"{trait}_pct"]
-        for trait in traits
+        p2[f"{m}_pct"]
+        for m in spider_metrics
     ],
 
-    theta=traits,
+    theta=spider_metrics,
 
     fill='toself',
 
@@ -481,7 +401,7 @@ fig.update_layout(
 
     showlegend=True,
 
-    height=550,
+    height=650,
 
     paper_bgcolor="rgba(0,0,0,0)",
 
@@ -494,53 +414,76 @@ st.plotly_chart(
 )
 
 # =========================================================
-# UNDERLYING TRAITS TABLE
+# UNDERLYING METRICS TABLE
 # =========================================================
 
-st.markdown("## Underlying Traits")
+st.markdown("## Underlying Metrics")
 
 rows = []
 
-for trait in traits:
+for display_name, metric_col in metrics.items():
 
     p1_val = round(
-        float(p1[trait]),
+        float(p1[metric_col]),
         2
     )
 
     p2_val = round(
-        float(p2[trait]),
+        float(p2[metric_col]),
         2
     )
 
     p1_pct = round(
-        float(p1[f"{trait}_pct"]),
+        float(p1[f"{display_name}_pct"]),
         0
     )
 
     p2_pct = round(
-        float(p2[f"{trait}_pct"]),
+        float(p2[f"{display_name}_pct"]),
         0
     )
 
-    if p1_val > p2_val:
+    # -----------------------------------------------------
+    # REVERSE LOGIC
+    # -----------------------------------------------------
 
-        p1_icon = "🟢"
-        p2_icon = "🔴"
+    if display_name in reverse_metrics:
 
-    elif p2_val > p1_val:
+        if p1_val < p2_val:
 
-        p1_icon = "🔴"
-        p2_icon = "🟢"
+            p1_icon = "🟢"
+            p2_icon = "🔴"
+
+        elif p2_val < p1_val:
+
+            p1_icon = "🔴"
+            p2_icon = "🟢"
+
+        else:
+
+            p1_icon = "⚪"
+            p2_icon = "⚪"
 
     else:
 
-        p1_icon = "⚪"
-        p2_icon = "⚪"
+        if p1_val > p2_val:
+
+            p1_icon = "🟢"
+            p2_icon = "🔴"
+
+        elif p2_val > p1_val:
+
+            p1_icon = "🔴"
+            p2_icon = "🟢"
+
+        else:
+
+            p1_icon = "⚪"
+            p2_icon = "⚪"
 
     rows.append({
 
-        "Trait": trait,
+        "Metric": display_name,
 
         player1:
         f"{p1_icon} {p1_val} ({int(p1_pct)}%)",
@@ -555,5 +498,5 @@ st.dataframe(
     table,
     use_container_width=True,
     hide_index=True,
-    height=420
+    height=520
 )
