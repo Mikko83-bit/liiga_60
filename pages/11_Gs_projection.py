@@ -30,7 +30,7 @@ Projection-oriented player model using:
 # LOAD DATA
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 # ---------------------------------------------------------
 # SKATERS
