@@ -30,7 +30,7 @@ Projection-oriented player model using:
 # LOAD DATA
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 try:
 
@@ -57,6 +57,7 @@ except Exception as e:
 
 df.columns = (
     df.columns
+    .astype(str)
     .str.strip()
     .str.replace("\n", "", regex=False)
     .str.replace("\r", "", regex=False)
@@ -64,6 +65,7 @@ df.columns = (
 
 teams_df.columns = (
     teams_df.columns
+    .astype(str)
     .str.strip()
     .str.replace("\n", "", regex=False)
     .str.replace("\r", "", regex=False)
@@ -107,7 +109,7 @@ required_team_columns = [
 ]
 
 # =========================================================
-# CHECK COLUMNS
+# CHECK REQUIRED COLUMNS
 # =========================================================
 
 missing_player = [
@@ -124,9 +126,7 @@ missing_team = [
 
 if len(missing_player) > 0:
 
-    st.error(
-        f"Missing player columns: {missing_player}"
-    )
+    st.error(f"Missing player columns: {missing_player}")
 
     st.write(df.columns.tolist())
 
@@ -134,9 +134,7 @@ if len(missing_player) > 0:
 
 if len(missing_team) > 0:
 
-    st.error(
-        f"Missing team columns: {missing_team}"
-    )
+    st.error(f"Missing team columns: {missing_team}")
 
     st.write(teams_df.columns.tolist())
 
@@ -186,22 +184,34 @@ for col in team_numeric_cols:
     )
 
 # =========================================================
-# AGE
+# AGE FIX
 # =========================================================
 
+# FORCE STRING
+df["Date of birth"] = (
+    df["Date of birth"]
+    .astype(str)
+    .str.strip()
+)
+
+# FORCE YYYY-MM-DD FORMAT
 df["Date of birth"] = pd.to_datetime(
     df["Date of birth"],
+    format="%Y-%m-%d",
     errors="coerce"
 )
 
-current_year = pd.Timestamp.now().year
+# TODAY
+today = pd.Timestamp.today().normalize()
 
+# EXACT AGE
 df["Age"] = (
-    current_year
-    - df["Date of birth"].dt.year
+    (
+        today - df["Date of birth"]
+    ).dt.days / 365.25
 )
 
-df["Age"] = df["Age"].fillna(0).astype(int)
+df["Age"] = df["Age"].round(1)
 
 # =========================================================
 # CLEAN DATA
@@ -227,7 +237,9 @@ fill_cols = [
     "Team xG when on ice",
     "Opponent's xG when on ice",
 
-    "Puck losses"
+    "Puck losses",
+
+    "Age"
 ]
 
 df[fill_cols] = df[fill_cols].fillna(0)
@@ -619,6 +631,8 @@ display_df.columns = [
 
 round_cols = [
 
+    "Age",
+
     "Projection",
 
     "Percentile",
@@ -639,6 +653,12 @@ round_cols = [
 display_df[round_cols] = (
     display_df[round_cols]
     .round(2)
+)
+
+display_df["TOI"] = (
+    display_df["TOI"]
+    .round(0)
+    .astype(int)
 )
 
 # =========================================================
