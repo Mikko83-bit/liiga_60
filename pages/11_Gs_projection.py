@@ -41,7 +41,7 @@ except Exception as e:
     st.stop()
 
 # =========================================================
-# CLEAN
+# CLEAN COLUMNS
 # =========================================================
 
 df.columns = df.columns.str.strip()
@@ -63,7 +63,7 @@ required_columns = [
     "First assist",
     "xG",
 
-    "Pre-shot passes",
+    "Pre-shots passes",
 
     "Team xG when on ice",
     "Opponent's xG when on ice",
@@ -82,7 +82,7 @@ if len(missing) > 0:
     st.stop()
 
 # =========================================================
-# NUMERIC
+# NUMERIC CONVERSION
 # =========================================================
 
 numeric_cols = required_columns[3:]
@@ -95,7 +95,7 @@ for col in numeric_cols:
     )
 
 # =========================================================
-# CLEAN NaN
+# CLEAN NaN / INF
 # =========================================================
 
 df = df.replace(
@@ -104,39 +104,6 @@ df = df.replace(
 )
 
 df = df.fillna(0)
-
-# =========================================================
-# SIDEBAR
-# =========================================================
-
-st.sidebar.header("Filters")
-
-position = st.sidebar.selectbox(
-    "Position",
-    sorted(df["Position"].dropna().unique())
-)
-
-max_age = st.sidebar.slider(
-    "Maximum Age",
-    16,
-    40,
-    25
-)
-
-min_toi = st.sidebar.slider(
-    "Minimum TOI",
-    0,
-    2000,
-    300,
-    10
-)
-
-min_games = st.sidebar.slider(
-    "Minimum Games",
-    0,
-    80,
-    10
-)
 
 # =========================================================
 # AGE
@@ -152,8 +119,9 @@ if "Date of birth" in df.columns:
     today = pd.Timestamp.today()
 
     df["Age"] = (
-        (today - df["Date of birth"]).dt.days
-        / 365.25
+        (
+            today - df["Date of birth"]
+        ).dt.days / 365.25
     ).round(1)
 
 else:
@@ -161,15 +129,68 @@ else:
     df["Age"] = 25
 
 # =========================================================
-# FILTERS
+# SIDEBAR
+# =========================================================
+
+st.sidebar.header("Filters")
+
+# ---------------------------------------------------------
+# POSITION
+# ---------------------------------------------------------
+
+positions = sorted(
+    df["Position"].dropna().unique()
+)
+
+selected_position = st.sidebar.selectbox(
+    "Position",
+    positions
+)
+
+# ---------------------------------------------------------
+# MAX AGE
+# ---------------------------------------------------------
+
+selected_age = st.sidebar.slider(
+    "Maximum Age",
+    16,
+    40,
+    25
+)
+
+# ---------------------------------------------------------
+# MINIMUM TOI
+# ---------------------------------------------------------
+
+min_toi = st.sidebar.slider(
+    "Minimum TOI",
+    0,
+    2000,
+    300,
+    10
+)
+
+# ---------------------------------------------------------
+# MINIMUM GAMES
+# ---------------------------------------------------------
+
+min_games = st.sidebar.slider(
+    "Minimum Games",
+    0,
+    80,
+    10
+)
+
+# =========================================================
+# APPLY FILTERS
 # =========================================================
 
 df = df[
-    df["Position"] == position
+    df["Position"] == selected_position
 ]
 
 df = df[
-    df["Age"] <= max_age
+    df["Age"] <= selected_age
 ]
 
 df = df[
@@ -190,7 +211,7 @@ if len(df) == 0:
     st.stop()
 
 # =========================================================
-# PER60
+# PER60 METRICS
 # =========================================================
 
 metrics_per60 = [
@@ -198,7 +219,7 @@ metrics_per60 = [
     "Goals",
     "First assist",
     "xG",
-    "Pre-shot passes",
+    "Pre-shots passes",
     "Puck losses"
 ]
 
@@ -220,7 +241,7 @@ league_metrics = [
     "Goals_per60",
     "First assist_per60",
     "xG_per60",
-    "Pre-shot passes_per60",
+    "Pre-shots passes_per60",
     "Puck losses_per60",
 
     "Team xG when on ice",
@@ -229,48 +250,72 @@ league_metrics = [
 
 for metric in league_metrics:
 
-    league_avg[metric] = df[metric].mean()
+    league_avg[metric] = (
+        df[metric].mean()
+    )
 
 # =========================================================
 # DELTA ABOVE AVERAGE
 # =========================================================
 
 df["dGoals"] = (
+
     df["Goals_per60"]
+
     - league_avg["Goals_per60"]
 )
 
 df["dA1"] = (
+
     df["First assist_per60"]
+
     - league_avg["First assist_per60"]
 )
 
 df["dxG"] = (
+
     df["xG_per60"]
+
     - league_avg["xG_per60"]
 )
 
 df["dPreShot"] = (
-    df["Pre-shot passes_per60"]
-    - league_avg["Pre-shot passes_per60"]
+
+    df["Pre-shots passes_per60"]
+
+    - league_avg["Pre-shots passes_per60"]
 )
 
-# reverse metric
+# ---------------------------------------------------------
+# REVERSE METRIC
+# ---------------------------------------------------------
 
 df["dPuckLoss"] = (
+
     league_avg["Puck losses_per60"]
+
     - df["Puck losses_per60"]
 )
 
+# ---------------------------------------------------------
+# ON-ICE xG
+# ---------------------------------------------------------
+
 df["dxGF"] = (
+
     df["Team xG when on ice"]
+
     - league_avg["Team xG when on ice"]
 )
 
-# reverse metric
+# ---------------------------------------------------------
+# REVERSE METRIC
+# ---------------------------------------------------------
 
 df["dxGA"] = (
+
     league_avg["Opponent's xG when on ice"]
+
     - df["Opponent's xG when on ice"]
 )
 
@@ -299,19 +344,25 @@ df["Projection Score Raw"] = (
 # TOI FACTOR
 # =========================================================
 
-league_avg_toi = df["Time on ice"].mean()
+league_avg_toi = (
+    df["Time on ice"].mean()
+)
 
 df["TOI Factor"] = np.sqrt(
+
     df["Time on ice"]
+
     / league_avg_toi
 )
 
 # =========================================================
-# FINAL SCORE
+# FINAL PROJECTION
 # =========================================================
 
 df["Projection Score"] = (
+
     df["Projection Score Raw"]
+
     * df["TOI Factor"]
 )
 
@@ -320,8 +371,11 @@ df["Projection Score"] = (
 # =========================================================
 
 df["Percentile"] = (
+
     df["Projection Score"]
+
     .rank(pct=True)
+
 ) * 100
 
 # =========================================================
@@ -329,8 +383,17 @@ df["Percentile"] = (
 # =========================================================
 
 df["Grade"] = (
+
     4
-    + (df["Percentile"] / 100) * 6
+
+    + (
+
+        df["Percentile"]
+
+        / 100
+
+    ) * 6
+
 ).round(1)
 
 # =========================================================
@@ -347,7 +410,7 @@ df = df.reset_index(drop=True)
 df["Rank"] = df.index + 1
 
 # =========================================================
-# DISPLAY
+# DISPLAY TABLE
 # =========================================================
 
 st.markdown("## Projection Rankings")
@@ -355,6 +418,7 @@ st.markdown("## Projection Rankings")
 show_cols = [
 
     "Rank",
+
     "Player",
     "Team",
     "Age",
@@ -370,7 +434,7 @@ show_cols = [
     "First assist_per60",
     "xG_per60",
 
-    "Pre-shot passes_per60",
+    "Pre-shots passes_per60",
 
     "Team xG when on ice",
     "Opponent's xG when on ice"
@@ -381,6 +445,7 @@ display_df = df[show_cols].copy()
 display_df.columns = [
 
     "Rank",
+
     "Player",
     "Team",
     "Age",
@@ -402,9 +467,40 @@ display_df.columns = [
     "Opp xG"
 ]
 
+# =========================================================
+# ROUNDING
+# =========================================================
+
+numeric_round_cols = [
+
+    "Age",
+    "TOI",
+
+    "Projection",
+    "Percentile",
+
+    "Goals/60",
+    "A1/60",
+    "xG/60",
+
+    "PreShots/60",
+
+    "Team xG",
+    "Opp xG"
+]
+
+display_df[numeric_round_cols] = (
+    display_df[numeric_round_cols]
+    .round(2)
+)
+
+# =========================================================
+# SHOW DATAFRAME
+# =========================================================
+
 st.dataframe(
     display_df,
     use_container_width=True,
-    height=800,
+    height=850,
     hide_index=True
 )
