@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 
 # =========================================================
 # PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
-    page_title="Defenseman Finder",
+    page_title="Defenseman Comparison",
     layout="wide"
 )
 
@@ -15,18 +16,13 @@ st.set_page_config(
 # TITLE
 # =========================================================
 
-st.title("Defenseman Finder")
-
-st.markdown("""
-Find defensemen with strong transition, puck-moving
-and defensive underlying metrics.
-""")
+st.title("Defenseman Comparison")
 
 # =========================================================
 # LOAD DATA
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 try:
 
@@ -53,14 +49,18 @@ required_columns = [
     "Position",
     "Games played",
     "Time on ice",
+    "Goals",
+    "First assist",
+    "Entries",
     "Breakouts",
+    "Entries via pass",
     "Breakouts via pass",
-    "Accurate passes, %",
+    "Takeaways",
     "Takeaways in DZ",
     "Puck losses",
+    "Puck battles won, %",
     "Team xG when on ice",
     "Opponent's xG when on ice",
-    "OZ possession",
     "Date of birth"
 ]
 
@@ -75,20 +75,24 @@ if len(missing_columns) > 0:
     st.stop()
 
 # =========================================================
-# NUMERIC CONVERSION
+# NUMERIC
 # =========================================================
 
 numeric_columns = [
     "Games played",
     "Time on ice",
+    "Goals",
+    "First assist",
+    "Entries",
     "Breakouts",
+    "Entries via pass",
     "Breakouts via pass",
-    "Accurate passes, %",
+    "Takeaways",
     "Takeaways in DZ",
     "Puck losses",
+    "Puck battles won, %",
     "Team xG when on ice",
-    "Opponent's xG when on ice",
-    "OZ possession"
+    "Opponent's xG when on ice"
 ]
 
 for col in numeric_columns:
@@ -114,21 +118,15 @@ df["Age"] = (
 ).round(1)
 
 # =========================================================
-# CLEAN DATA
-# =========================================================
-
-df = df.dropna(subset=["Time on ice"])
-
-df = df[
-    df["Time on ice"] > 0
-]
-
-# =========================================================
-# ONLY DEFENSEMEN
+# FILTER DEFENSEMEN
 # =========================================================
 
 df = df[
     df["Position"] == "D"
+]
+
+df = df[
+    df["Time on ice"] > 0
 ]
 
 # =========================================================
@@ -137,355 +135,389 @@ df = df[
 
 st.sidebar.header("Filters")
 
-# ---------------------------------------------------------
-# MAX AGE
-# ---------------------------------------------------------
-
-min_age = int(df["Age"].min())
-max_age = int(df["Age"].max())
-
-selected_age = st.sidebar.slider(
-    "Maximum Age",
-    min_value=min_age,
-    max_value=max_age,
-    value=max_age
-)
-
-# ---------------------------------------------------------
-# MINIMUM TOI
-# ---------------------------------------------------------
-
-min_toi = st.sidebar.slider(
+MIN_TOI = st.sidebar.slider(
     "Minimum TOI",
-    min_value=0,
-    max_value=1500,
-    value=300,
-    step=10
+    0,
+    1500,
+    300,
+    10
 )
 
-# ---------------------------------------------------------
-# MINIMUM GAMES
-# ---------------------------------------------------------
-
-min_games = st.sidebar.slider(
+MIN_GP = st.sidebar.slider(
     "Minimum Games",
-    min_value=0,
-    max_value=int(df["Games played"].max()),
-    value=10
+    0,
+    int(df["Games played"].max()),
+    10
 )
 
-# ---------------------------------------------------------
-# PROFILE
-# ---------------------------------------------------------
-
-profiles = [
-    "Puck Moving",
-    "Transition",
-    "Two-Way",
-    "Defensive"
+df = df[
+    df["Time on ice"] >= MIN_TOI
 ]
 
-selected_profile = st.sidebar.selectbox(
-    "Profile",
-    profiles
+df = df[
+    df["Games played"] >= MIN_GP
+]
+
+# =========================================================
+# TEAMS / PLAYERS
+# =========================================================
+
+teams = sorted(df["Team"].dropna().unique())
+
+team1 = st.sidebar.selectbox(
+    "Team 1",
+    teams,
+    index=0
+)
+
+team2 = st.sidebar.selectbox(
+    "Team 2",
+    teams,
+    index=min(1, len(teams)-1)
+)
+
+players1 = sorted(
+    df[df["Team"] == team1]["Player"].unique()
+)
+
+players2 = sorted(
+    df[df["Team"] == team2]["Player"].unique()
+)
+
+st.sidebar.markdown("---")
+
+player1 = st.sidebar.selectbox(
+    "Player 1",
+    players1
+)
+
+player2 = st.sidebar.selectbox(
+    "Player 2",
+    players2
 )
 
 # =========================================================
-# FILTER DATA
-# =========================================================
-
-filtered_df = df.copy()
-
-filtered_df = filtered_df[
-    filtered_df["Age"] <= selected_age
-]
-
-filtered_df = filtered_df[
-    filtered_df["Time on ice"] >= min_toi
-]
-
-filtered_df = filtered_df[
-    filtered_df["Games played"] >= min_games
-]
-
-# =========================================================
-# METRICS
-# =========================================================
-
-metrics = [
-    "Breakouts",
-    "Breakouts via pass",
-    "Accurate passes, %",
-    "Takeaways in DZ",
-    "Puck losses",
-    "Team xG when on ice",
-    "Opponent's xG when on ice",
-    "OZ possession"
-]
-
-negative_metrics = [
-    "Puck losses",
-    "Opponent's xG when on ice"
-]
-
-# =========================================================
-# PER60
+# PER60 METRICS
 # =========================================================
 
 per60_metrics = [
+    "Entries",
     "Breakouts",
+    "Entries via pass",
     "Breakouts via pass",
+    "Takeaways",
     "Takeaways in DZ",
     "Puck losses"
 ]
 
 for metric in per60_metrics:
 
-    filtered_df[f"{metric}_per60"] = (
-        filtered_df[metric]
-        / filtered_df["Time on ice"]
+    df[f"{metric}_per60"] = (
+        df[metric]
+        / df["Time on ice"]
     ) * 60
 
 # =========================================================
-# NON-PER60 METRICS
+# TRAIT ENGINE
 # =========================================================
 
-filtered_df["Accurate passes, %_value"] = (
-    filtered_df["Accurate passes, %"]
-)
+# ---------------------------------------------------------
+# TRANSITION
+# ---------------------------------------------------------
 
-filtered_df["Team xG when on ice_value"] = (
-    filtered_df["Team xG when on ice"]
-)
+df["Transition"] = (
 
-filtered_df["Opponent's xG when on ice_value"] = (
-    filtered_df["Opponent's xG when on ice"]
-)
+    df["Entries_per60"]
 
-filtered_df["OZ possession_value"] = (
-    filtered_df["OZ possession"]
-)
+    + df["Breakouts_per60"]
 
-# =========================================================
-# CREATE ANALYTICS VALUE
-# =========================================================
+    + df["Entries via pass_per60"]
 
-for metric in metrics:
+    + df["Breakouts via pass_per60"]
 
-    if metric in per60_metrics:
+) / 4
 
-        filtered_df[f"{metric}_value"] = (
-            filtered_df[f"{metric}_per60"]
-        )
+# ---------------------------------------------------------
+# PUCK MOVING
+# ---------------------------------------------------------
 
-# =========================================================
-# LEAGUE AVERAGES
-# =========================================================
+df["Puck Moving"] = (
 
-league_avg = {}
+    df["Breakouts via pass_per60"]
 
-for metric in metrics:
+    + df["Entries via pass_per60"]
 
-    league_avg[metric] = (
-        filtered_df[f"{metric}_value"].mean()
+    + df["Team xG when on ice"]
+
+) / 3
+
+# ---------------------------------------------------------
+# DEFENSE
+# ---------------------------------------------------------
+
+df["Defense"] = (
+
+    df["Takeaways in DZ_per60"]
+
+    + (
+        df["Opponent's xG when on ice"].max()
+
+        - df["Opponent's xG when on ice"]
     )
 
-# =========================================================
-# DELTAS
-# =========================================================
+) / 2
 
-for metric in metrics:
+# ---------------------------------------------------------
+# PUCK SECURITY
+# ---------------------------------------------------------
 
-    filtered_df[f"d_{metric}"] = (
-        filtered_df[f"{metric}_value"]
-        - league_avg[metric]
-    )
+df["Puck Security"] = (
 
-# =========================================================
-# PROFILE MODELS
-# =========================================================
-
-if selected_profile == "Puck Moving":
-
-    filtered_df["Score"] = (
-
-        0.35 * filtered_df["d_Breakouts via pass"]
-
-        + 0.30 * filtered_df["d_Accurate passes, %"]
-
-        + 0.20 * filtered_df["d_Breakouts"]
-
-        + 0.15 * filtered_df["d_OZ possession"]
-
-        - 0.10 * filtered_df["d_Puck losses"]
-
-    )
-
-elif selected_profile == "Transition":
-
-    filtered_df["Score"] = (
-
-        0.40 * filtered_df["d_Breakouts"]
-
-        + 0.35 * filtered_df["d_Breakouts via pass"]
-
-        + 0.20 * filtered_df["d_Team xG when on ice"]
-
-        + 0.10 * filtered_df["d_Takeaways in DZ"]
-
-    )
-
-elif selected_profile == "Two-Way":
-
-    filtered_df["Score"] = (
-
-        0.25 * filtered_df["d_Breakouts"]
-
-        + 0.20 * filtered_df["d_Breakouts via pass"]
-
-        + 0.20 * filtered_df["d_Takeaways in DZ"]
-
-        + 0.20 * filtered_df["d_Team xG when on ice"]
-
-        - 0.25 * filtered_df["d_Opponent's xG when on ice"]
-
-        - 0.10 * filtered_df["d_Puck losses"]
-
-    )
-
-elif selected_profile == "Defensive":
-
-    filtered_df["Score"] = (
-
-        0.35 * filtered_df["d_Takeaways in DZ"]
-
-        - 0.35 * filtered_df["d_Opponent's xG when on ice"]
-
-        - 0.20 * filtered_df["d_Puck losses"]
-
-        + 0.15 * filtered_df["d_Accurate passes, %"]
-
-        + 0.10 * filtered_df["d_Breakouts via pass"]
-
-    )
-
-# =========================================================
-# TOI FACTOR
-# =========================================================
-
-filtered_df["TOI Factor"] = (
-
-    filtered_df["Time on ice"] / 700
-
-).clip(0.60, 1.50)
-
-# =========================================================
-# FINAL SCORE
-# =========================================================
-
-filtered_df["Final Score"] = (
-
-    filtered_df["Score"]
-
-    * filtered_df["TOI Factor"]
-
-)
-
-# =========================================================
-# PERCENTILE
-# =========================================================
-
-filtered_df["Percentile"] = (
-    filtered_df["Final Score"]
-    .rank(pct=True)
-) * 100
-
-# =========================================================
-# GRADE
-# =========================================================
-
-filtered_df["Grade"] = (
-    4 +
     (
-        filtered_df["Percentile"]
-        / 100
-    ) * 6
-).round(1)
+        df["Puck losses_per60"].max()
 
-# =========================================================
-# SORT
-# =========================================================
+        - df["Puck losses_per60"]
+    )
 
-filtered_df = filtered_df.sort_values(
-    "Final Score",
-    ascending=False
 )
 
-filtered_df = filtered_df.reset_index(drop=True)
+# ---------------------------------------------------------
+# PHYSICALITY
+# ---------------------------------------------------------
 
-filtered_df.index += 1
+df["Physicality"] = (
+    df["Puck battles won, %"]
+)
 
-# =========================================================
-# OUTPUT
-# =========================================================
+# ---------------------------------------------------------
+# OFFENSIVE SUPPORT
+# ---------------------------------------------------------
 
-output = pd.DataFrame({
+df["Offensive Support"] = (
 
-    "Rank":
-    filtered_df.index,
+    df["Goals"]
 
-    "Player":
-    filtered_df["Player"],
+    + df["First assist"]
 
-    "Team":
-    filtered_df["Team"],
+    + df["Team xG when on ice"]
 
-    "Age":
-    filtered_df["Age"],
-
-    "GP":
-    filtered_df["Games played"],
-
-    "TOI":
-    filtered_df["Time on ice"].round(0),
-
-    "Grade":
-    filtered_df["Grade"],
-
-    "Score":
-    filtered_df["Final Score"].round(2),
-
-    "Breakouts/60":
-    filtered_df["Breakouts_per60"].round(2),
-
-    "Pass Breakouts/60":
-    filtered_df["Breakouts via pass_per60"].round(2),
-
-    "DZ Takeaways/60":
-    filtered_df["Takeaways in DZ_per60"].round(2),
-
-    "Puck Losses/60":
-    filtered_df["Puck losses_per60"].round(2),
-
-    "Pass %":
-    filtered_df["Accurate passes, %"].round(1),
-
-    "Team xG":
-    filtered_df["Team xG when on ice"].round(2),
-
-    "Opp xG":
-    filtered_df["Opponent's xG when on ice"].round(2)
-
-})
+) / 3
 
 # =========================================================
-# SHOW TABLE
+# TRAITS
 # =========================================================
 
-st.markdown(f"## {selected_profile} Defensemen")
+traits = [
+    "Transition",
+    "Puck Moving",
+    "Defense",
+    "Puck Security",
+    "Physicality",
+    "Offensive Support"
+]
+
+# =========================================================
+# PERCENTILES
+# =========================================================
+
+for trait in traits:
+
+    df[f"{trait}_pct"] = (
+        df[trait]
+        .rank(pct=True)
+    ) * 100
+
+# =========================================================
+# PLAYER DATA
+# =========================================================
+
+p1 = df[
+    df["Player"] == player1
+].iloc[0]
+
+p2 = df[
+    df["Player"] == player2
+].iloc[0]
+
+# =========================================================
+# HEADER
+# =========================================================
+
+left, right = st.columns(2)
+
+with left:
+
+    st.markdown(f"## {player1}")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Age",
+        p1["Age"]
+    )
+
+    c2.metric(
+        "TOI",
+        int(p1["Time on ice"])
+    )
+
+    c3.metric(
+        "GP",
+        int(p1["Games played"])
+    )
+
+with right:
+
+    st.markdown(f"## {player2}")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Age",
+        p2["Age"]
+    )
+
+    c2.metric(
+        "TOI",
+        int(p2["Time on ice"])
+    )
+
+    c3.metric(
+        "GP",
+        int(p2["Games played"])
+    )
+
+# =========================================================
+# SPIDERWEB
+# =========================================================
+
+fig = go.Figure()
+
+fig.add_trace(go.Scatterpolar(
+
+    r=[
+        p1[f"{trait}_pct"]
+        for trait in traits
+    ],
+
+    theta=traits,
+
+    fill='toself',
+
+    name=player1,
+
+    line=dict(
+        color="#00E5FF",
+        width=3
+    ),
+
+    fillcolor="rgba(0,229,255,0.30)"
+))
+
+fig.add_trace(go.Scatterpolar(
+
+    r=[
+        p2[f"{trait}_pct"]
+        for trait in traits
+    ],
+
+    theta=traits,
+
+    fill='toself',
+
+    name=player2,
+
+    line=dict(
+        color="#FF4B4B",
+        width=3
+    ),
+
+    fillcolor="rgba(255,75,75,0.30)"
+))
+
+fig.update_layout(
+
+    polar=dict(
+
+        radialaxis=dict(
+            visible=True,
+            range=[0, 100]
+        )
+    ),
+
+    showlegend=True,
+
+    height=550,
+
+    paper_bgcolor="rgba(0,0,0,0)",
+
+    plot_bgcolor="rgba(0,0,0,0)"
+)
+
+st.plotly_chart(
+    fig,
+    use_container_width=True
+)
+
+# =========================================================
+# UNDERLYING TRAITS
+# =========================================================
+
+st.markdown("## Underlying Traits")
+
+rows = []
+
+for trait in traits:
+
+    p1_val = round(
+        p1[trait],
+        2
+    )
+
+    p2_val = round(
+        p2[trait],
+        2
+    )
+
+    p1_pct = round(
+        p1[f"{trait}_pct"]
+    )
+
+    p2_pct = round(
+        p2[f"{trait}_pct"]
+    )
+
+    if p1_val > p2_val:
+
+        p1_icon = "🟢"
+        p2_icon = "🔴"
+
+    elif p2_val > p1_val:
+
+        p1_icon = "🔴"
+        p2_icon = "🟢"
+
+    else:
+
+        p1_icon = "⚪"
+        p2_icon = "⚪"
+
+    rows.append({
+
+        "Trait": trait,
+
+        player1:
+        f"{p1_icon} {p1_val} ({p1_pct}%)",
+
+        player2:
+        f"{p2_icon} {p2_val} ({p2_pct}%)"
+    })
+
+table = pd.DataFrame(rows)
 
 st.dataframe(
-    output,
+    table,
     use_container_width=True,
-    height=900
+    hide_index=True,
+    height=400
 )
