@@ -26,20 +26,7 @@ FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 df = pd.read_excel(FILE)
 )
-# =========================================================
-# READ EXCEL
-# =========================================================
 
-try:
-
-    raw_df = pd.read_excel(
-        "Liiga 2025-2026_skaters_teams.xlsx"
-    )
-
-except Exception as e:
-
-    st.error(f"Excel loading failed: {e}")
-    st.stop()
 # =========================================================
 # CLEAN COLUMNS
 # =========================================================
