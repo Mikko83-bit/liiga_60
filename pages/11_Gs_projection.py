@@ -30,30 +30,17 @@ Projection-oriented player model using:
 # LOAD DATA
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
-
-# ---------------------------------------------------------
-# SKATERS
-# ---------------------------------------------------------
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 try:
 
+    # PLAYERS
     df = pd.read_excel(
         FILE,
         sheet_name="Skaters"
     )
 
-except Exception as e:
-
-    st.error(f"Failed loading Skaters sheet: {e}")
-    st.stop()
-
-# ---------------------------------------------------------
-# TEAMS
-# ---------------------------------------------------------
-
-try:
-
+    # TEAMS
     teams_df = pd.read_excel(
         FILE,
         sheet_name="Teams"
@@ -61,7 +48,7 @@ try:
 
 except Exception as e:
 
-    st.error(f"Failed loading Teams sheet: {e}")
+    st.error(f"Excel loading failed: {e}")
     st.stop()
 
 # =========================================================
@@ -120,39 +107,35 @@ required_team_columns = [
 ]
 
 # =========================================================
-# CHECK PLAYER COLUMNS
+# CHECK COLUMNS
 # =========================================================
 
-missing_player_cols = [
+missing_player = [
 
     col for col in required_player_columns
     if col not in df.columns
 ]
 
-if len(missing_player_cols) > 0:
+missing_team = [
+
+    col for col in required_team_columns
+    if col not in teams_df.columns
+]
+
+if len(missing_player) > 0:
 
     st.error(
-        f"Missing player columns: {missing_player_cols}"
+        f"Missing player columns: {missing_player}"
     )
 
     st.write(df.columns.tolist())
 
     st.stop()
 
-# =========================================================
-# CHECK TEAM COLUMNS
-# =========================================================
-
-missing_team_cols = [
-
-    col for col in required_team_columns
-    if col not in teams_df.columns
-]
-
-if len(missing_team_cols) > 0:
+if len(missing_team) > 0:
 
     st.error(
-        f"Missing team columns: {missing_team_cols}"
+        f"Missing team columns: {missing_team}"
     )
 
     st.write(teams_df.columns.tolist())
@@ -211,13 +194,14 @@ df["Date of birth"] = pd.to_datetime(
     errors="coerce"
 )
 
-today = pd.Timestamp.today()
+current_year = pd.Timestamp.now().year
 
 df["Age"] = (
-    (
-        today - df["Date of birth"]
-    ).dt.days / 365.25
-).round(1)
+    current_year
+    - df["Date of birth"].dt.year
+)
+
+df["Age"] = df["Age"].fillna(0).astype(int)
 
 # =========================================================
 # CLEAN DATA
@@ -228,8 +212,10 @@ df = df.replace(
     np.nan
 )
 
-# ONLY NUMERIC COLUMNS
 fill_cols = [
+
+    "Games played",
+    "Time on ice",
 
     "Goals",
     "First assist",
@@ -238,15 +224,10 @@ fill_cols = [
 
     "Pre-shots passes",
 
-    "Puck losses",
-
     "Team xG when on ice",
     "Opponent's xG when on ice",
 
-    "Games played",
-    "Time on ice",
-
-    "Age"
+    "Puck losses"
 ]
 
 df[fill_cols] = df[fill_cols].fillna(0)
@@ -257,10 +238,7 @@ df[fill_cols] = df[fill_cols].fillna(0)
 
 st.sidebar.header("Filters")
 
-# ---------------------------------------------------------
 # POSITION
-# ---------------------------------------------------------
-
 positions = sorted(
     df["Position"].dropna().unique()
 )
@@ -270,10 +248,7 @@ selected_position = st.sidebar.selectbox(
     positions
 )
 
-# ---------------------------------------------------------
-# MAX AGE
-# ---------------------------------------------------------
-
+# AGE
 selected_age = st.sidebar.slider(
     "Maximum Age",
     16,
@@ -281,10 +256,7 @@ selected_age = st.sidebar.slider(
     25
 )
 
-# ---------------------------------------------------------
-# MIN TOI
-# ---------------------------------------------------------
-
+# TOI
 min_toi = st.sidebar.slider(
     "Minimum TOI",
     0,
@@ -293,10 +265,7 @@ min_toi = st.sidebar.slider(
     10
 )
 
-# ---------------------------------------------------------
-# MIN GP
-# ---------------------------------------------------------
-
+# GAMES
 min_games = st.sidebar.slider(
     "Minimum Games",
     0,
@@ -325,13 +294,12 @@ df = df[
 ]
 
 # =========================================================
-# STOP IF EMPTY
+# EMPTY CHECK
 # =========================================================
 
 if len(df) == 0:
 
     st.warning("No players found.")
-
     st.stop()
 
 # =========================================================
@@ -456,7 +424,7 @@ df["dPreShots"] = (
 )
 
 # =========================================================
-# REVERSE PUCK LOSSES
+# REVERSE METRIC
 # =========================================================
 
 df["dPuckLoss"] = (
@@ -521,7 +489,7 @@ df["TOI Factor"] = np.sqrt(
 )
 
 # =========================================================
-# FINAL SCORE
+# FINAL PROJECTION
 # =========================================================
 
 df["Projection Score"] = (
@@ -650,10 +618,6 @@ display_df.columns = [
 # =========================================================
 
 round_cols = [
-
-    "Age",
-
-    "TOI",
 
     "Projection",
 
