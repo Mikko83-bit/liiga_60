@@ -11,6 +11,10 @@ st.set_page_config(
     layout="wide"
 )
 
+# =========================================================
+# TITLE
+# =========================================================
+
 st.title("Breakout Finder")
 
 st.markdown("""
@@ -18,14 +22,20 @@ Find players with strong underlying metrics that may
 predict future offensive breakout potential.
 """)
 
-# ==================================================
+# =========================================================
 # LOAD DATA
-# ==================================================
+# =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
-df = pd.read_excel(FILE)
-)
+try:
+
+    df = pd.read_excel(FILE)
+
+except Exception as e:
+
+    st.error(f"Excel loading failed: {e}")
+    st.stop()
 
 # =========================================================
 # CLEAN COLUMNS
@@ -116,7 +126,7 @@ df = df[
 ]
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR FILTERS
 # =========================================================
 
 st.sidebar.header("Filters")
@@ -237,7 +247,7 @@ for metric in metrics:
     )
 
 # =========================================================
-# DELTA METRICS
+# DELTA VS LEAGUE
 # =========================================================
 
 for metric in metrics:
@@ -249,8 +259,6 @@ for metric in metrics:
 
 # =========================================================
 # UNDERLYING SCORE
-# =========================================================
-# Strong process metrics
 # =========================================================
 
 filtered_df["Underlying Score"] = (
@@ -283,9 +291,6 @@ filtered_df["Production Score"] = (
 
 # =========================================================
 # BREAKOUT GAP
-# =========================================================
-# Big positive gap:
-# strong underlyings but lower production
 # =========================================================
 
 filtered_df["Breakout Gap"] = (
@@ -347,7 +352,7 @@ filtered_df["Percentile"] = (
 # GRADE
 # =========================================================
 
-filtered_df["Grade"] = (
+filtered_df["Breakout Grade"] = (
     4 +
     (
         filtered_df["Percentile"]
@@ -393,7 +398,7 @@ output = pd.DataFrame({
     filtered_df["Time on ice"].round(0),
 
     "Breakout Grade":
-    filtered_df["Grade"],
+    filtered_df["Breakout Grade"],
 
     "Breakout Score":
     filtered_df["Breakout Score"].round(2),
