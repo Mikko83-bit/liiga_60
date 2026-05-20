@@ -18,14 +18,13 @@ Find players with strong underlying metrics that may
 predict future offensive breakout potential.
 """)
 
-# =========================================================
-# FILE UPLOADER
-# =========================================================
+# ==================================================
+# LOAD DATA
+# ==================================================
 
-raw_df = pd.read_excel(uploaded_file)
+FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
-raw_df = pd.read_excel(
-    "Liiga 2025-2026_skaters_teams.xlsx"
+df = pd.read_excel(FILE)
 )
 # =========================================================
 # READ EXCEL
