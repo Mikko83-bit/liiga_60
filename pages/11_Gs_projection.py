@@ -18,22 +18,22 @@ st.set_page_config(
 st.title("Projection Model")
 
 st.markdown("""
-Projection-oriented player model using:
+Projection-oriented model using:
 
 - Relative production
 - Relative on-ice impact
-- Team-context adjusted metrics
+- Team-adjusted xG environment
 - Usage adjustment
 """)
 
 # =========================================================
-# LOAD DATA
+# LOAD EXCEL
 # =========================================================
 
 FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 # ---------------------------------------------------------
-# PLAYERS
+# PLAYERS SHEET
 # ---------------------------------------------------------
 
 try:
@@ -45,11 +45,11 @@ try:
 
 except Exception as e:
 
-    st.error(f"Player sheet loading failed: {e}")
+    st.error(f"Failed loading player sheet: {e}")
     st.stop()
 
 # ---------------------------------------------------------
-# TEAMS
+# TEAMS SHEET
 # ---------------------------------------------------------
 
 try:
@@ -61,15 +61,26 @@ try:
 
 except Exception as e:
 
-    st.error(f"Teams sheet loading failed: {e}")
+    st.error(f"Failed loading Teams sheet: {e}")
     st.stop()
 
 # =========================================================
 # CLEAN COLUMNS
 # =========================================================
 
-df.columns = df.columns.str.strip()
-teams_df.columns = teams_df.columns.str.strip()
+df.columns = (
+    df.columns
+    .str.strip()
+    .str.replace("\n", "")
+    .str.replace("\r", "")
+)
+
+teams_df.columns = (
+    teams_df.columns
+    .str.strip()
+    .str.replace("\n", "")
+    .str.replace("\r", "")
+)
 
 # =========================================================
 # REQUIRED PLAYER COLUMNS
@@ -97,57 +108,86 @@ required_columns = [
     "Puck losses"
 ]
 
-missing = [
-    c for c in required_columns
-    if c not in df.columns
+missing_player_cols = [
+
+    col for col in required_columns
+    if col not in df.columns
 ]
 
-if len(missing) > 0:
+if len(missing_player_cols) > 0:
 
-    st.error(f"Missing player columns: {missing}")
+    st.error(
+        f"Missing player columns: {missing_player_cols}"
+    )
+
     st.stop()
 
 # =========================================================
 # REQUIRED TEAM COLUMNS
 # =========================================================
 
-team_required = [
+required_team_cols = [
+
     "Team",
     "Games",
+
     "xGF",
     "xGA"
 ]
 
-team_missing = [
-    c for c in team_required
-    if c not in teams_df.columns
+missing_team_cols = [
+
+    col for col in required_team_cols
+    if col not in teams_df.columns
 ]
 
-if len(team_missing) > 0:
+if len(missing_team_cols) > 0:
 
-    st.error(f"Missing team columns: {team_missing}")
+    st.error(
+        f"Missing team columns: {missing_team_cols}"
+    )
+
+    st.write(teams_df.columns.tolist())
+
     st.stop()
 
 # =========================================================
 # NUMERIC CONVERSION
 # =========================================================
 
-numeric_cols = required_columns[3:]
+player_numeric_cols = [
 
-for col in numeric_cols:
+    "Games played",
+    "Time on ice",
+
+    "Goals",
+    "First assist",
+
+    "xG",
+
+    "Pre-shots passes",
+
+    "Team xG when on ice",
+    "Opponent's xG when on ice",
+
+    "Puck losses"
+]
+
+for col in player_numeric_cols:
 
     df[col] = pd.to_numeric(
         df[col],
         errors="coerce"
     )
 
-team_numeric = [
+team_numeric_cols = [
+
     "Games",
     "xGF",
     "xGA"
 ]
 
-for col in team_numeric:
+for col in team_numeric_cols:
 
     teams_df[col] = pd.to_numeric(
         teams_df[col],
@@ -155,7 +195,7 @@ for col in team_numeric:
     )
 
 # =========================================================
-# CLEAN NaN / INF
+# CLEAN DATA
 # =========================================================
 
 df = df.replace(
@@ -179,9 +219,13 @@ if "Date of birth" in df.columns:
     today = pd.Timestamp.today()
 
     df["Age"] = (
+
         (
             today - df["Date of birth"]
-        ).dt.days / 365.25
+        ).dt.days
+
+        / 365.25
+
     ).round(1)
 
 else:
@@ -208,7 +252,7 @@ selected_position = st.sidebar.selectbox(
 )
 
 # ---------------------------------------------------------
-# MAX AGE
+# AGE
 # ---------------------------------------------------------
 
 selected_age = st.sidebar.slider(
@@ -219,7 +263,7 @@ selected_age = st.sidebar.slider(
 )
 
 # ---------------------------------------------------------
-# MIN TOI
+# TOI
 # ---------------------------------------------------------
 
 min_toi = st.sidebar.slider(
@@ -231,7 +275,7 @@ min_toi = st.sidebar.slider(
 )
 
 # ---------------------------------------------------------
-# MIN GP
+# GAMES
 # ---------------------------------------------------------
 
 min_games = st.sidebar.slider(
@@ -242,7 +286,7 @@ min_games = st.sidebar.slider(
 )
 
 # =========================================================
-# APPLY FILTERS
+# FILTERS
 # =========================================================
 
 df = df[
@@ -268,16 +312,18 @@ df = df[
 if len(df) == 0:
 
     st.warning("No players found.")
+
     st.stop()
 
 # =========================================================
 # PER60
 # =========================================================
 
-metrics_per60 = [
+per60_metrics = [
 
     "Goals",
     "First assist",
+
     "xG",
 
     "Pre-shots passes",
@@ -285,7 +331,7 @@ metrics_per60 = [
     "Puck losses"
 ]
 
-for metric in metrics_per60:
+for metric in per60_metrics:
 
     df[f"{metric}_per60"] = (
 
@@ -296,7 +342,7 @@ for metric in metrics_per60:
     ) * 60
 
 # =========================================================
-# TEAM MAPS
+# TEAM CONTEXT
 # =========================================================
 
 teams_df["xGF_per_game"] = (
@@ -312,6 +358,10 @@ teams_df["xGA_per_game"] = (
 
     / teams_df["Games"]
 )
+
+# ---------------------------------------------------------
+# MAPS
+# ---------------------------------------------------------
 
 team_xgf_map = dict(
 
@@ -339,6 +389,7 @@ league_metrics = [
 
     "Goals_per60",
     "First assist_per60",
+
     "xG_per60",
 
     "Pre-shots passes_per60",
@@ -393,7 +444,7 @@ df["dxG"] = (
 # PRE-SHOTS
 # ---------------------------------------------------------
 
-df["dPreShot"] = (
+df["dPreShots"] = (
 
     df["Pre-shots passes_per60"]
 
@@ -449,7 +500,7 @@ df["Projection Raw"] = (
 
     + (0.22 * df["dxG"])
 
-    + (0.18 * df["dPreShot"])
+    + (0.18 * df["dPreShots"])
 
     + (0.12 * df["Rel xGF"])
 
@@ -539,13 +590,16 @@ show_cols = [
 
     "Player",
     "Team",
+
     "Age",
 
     "Games played",
     "Time on ice",
 
     "Grade",
+
     "Projection Score",
+
     "Percentile",
 
     "Goals_per60",
@@ -567,13 +621,16 @@ display_df.columns = [
 
     "Player",
     "Team",
+
     "Age",
 
     "GP",
     "TOI",
 
     "Grade",
+
     "Projection",
+
     "Percentile",
 
     "Goals/60",
@@ -594,12 +651,15 @@ display_df.columns = [
 round_cols = [
 
     "Age",
+
     "TOI",
 
     "Projection",
+
     "Percentile",
 
     "Goals/60",
+
     "A1/60",
 
     "xG/60",
@@ -607,11 +667,14 @@ round_cols = [
     "PreShots/60",
 
     "Rel xGF",
+
     "Rel xGA"
 ]
 
 display_df[round_cols] = (
+
     display_df[round_cols]
+
     .round(2)
 )
 
