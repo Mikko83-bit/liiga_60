@@ -14,6 +14,16 @@ st.set_page_config(
 
 st.title("Liiga Projection Grade Model")
 
+st.write("""
+Model logic:
+1. Raw data
+2. Per60 metrics
+3. League-relative delta metrics
+4. Weighted projection score
+5. Percentile
+6. Grade (4-10)
+""")
+
 # =========================================================
 # FILE UPLOADER
 # =========================================================
@@ -34,7 +44,7 @@ if uploaded_file is None:
 
 try:
 
-    raw_df = pd.read_excel(uploaded_file)
+    df = pd.read_excel(uploaded_file)
 
 except Exception as e:
 
@@ -45,7 +55,7 @@ except Exception as e:
 # CLEAN COLUMNS
 # =========================================================
 
-raw_df.columns = raw_df.columns.str.strip()
+df.columns = df.columns.str.strip()
 
 # =========================================================
 # REQUIRED COLUMNS
@@ -55,7 +65,6 @@ required_columns = [
     "Player",
     "Team",
     "Position",
-    "Games played",
     "Time on ice",
     "Goals",
     "First assist",
@@ -71,7 +80,7 @@ required_columns = [
 
 missing_columns = [
     col for col in required_columns
-    if col not in raw_df.columns
+    if col not in df.columns
 ]
 
 if len(missing_columns) > 0:
@@ -80,85 +89,32 @@ if len(missing_columns) > 0:
     st.stop()
 
 # =========================================================
-# NUMERIC CONVERSION
+# CLEAN DATA
 # =========================================================
 
-numeric_columns = [
-    "Games played",
-    "Time on ice",
-    "Goals",
-    "First assist",
-    "xG",
-    "Shots",
-    "Passes to the slot",
-    "Entries",
-    "Takeaways",
-    "Puck losses",
-    "Team xG when on ice",
-    "Opponent's xG when on ice"
-]
+df = df.copy()
 
-for col in numeric_columns:
+df["Time on ice"] = pd.to_numeric(
+    df["Time on ice"],
+    errors="coerce"
+)
 
-    raw_df[col] = pd.to_numeric(
-        raw_df[col],
-        errors="coerce"
-    )
+df = df.dropna(subset=["Time on ice"])
 
-raw_df = raw_df.dropna(subset=["Time on ice"])
-
-raw_df = raw_df[
-    raw_df["Time on ice"] > 0
-]
+df = df[df["Time on ice"] > 0]
 
 # =========================================================
-# SIDEBAR
-# =========================================================
-
-st.sidebar.header("Filters")
-
-# ---------------------------------------------------------
 # MINIMUM TOI
-# ---------------------------------------------------------
+# =========================================================
 
 MIN_TOI = st.sidebar.slider(
     "Minimum TOI",
-    min_value=0,
-    max_value=1000,
-    value=200,
-    step=10
+    0,
+    1000,
+    200
 )
 
-# ---------------------------------------------------------
-# MINIMUM GAMES
-# ---------------------------------------------------------
-
-MIN_GAMES = st.sidebar.slider(
-    "Minimum Games",
-    min_value=0,
-    max_value=int(raw_df["Games played"].max()),
-    value=5,
-    step=1
-)
-
-# =========================================================
-# BASE DATA FOR ANALYTICS
-# =========================================================
-# THIS DATA BUILDS:
-# - LEAGUE AVERAGES
-# - PERCENTILES
-# - PROJECTION SCORES
-# =========================================================
-
-base_df = raw_df.copy()
-
-base_df = base_df[
-    base_df["Time on ice"] >= MIN_TOI
-]
-
-base_df = base_df[
-    base_df["Games played"] >= MIN_GAMES
-]
+df = df[df["Time on ice"] >= MIN_TOI]
 
 # =========================================================
 # METRICS
@@ -177,10 +133,16 @@ metrics = [
     "Opponent's xG when on ice"
 ]
 
-negative_metrics = [
-    "Puck losses",
-    "Opponent's xG when on ice"
-]
+# =========================================================
+# NUMERIC CONVERSION
+# =========================================================
+
+for metric in metrics:
+
+    df[metric] = pd.to_numeric(
+        df[metric],
+        errors="coerce"
+    ).fillna(0)
 
 # =========================================================
 # PER60
@@ -188,9 +150,8 @@ negative_metrics = [
 
 for metric in metrics:
 
-    base_df[f"{metric}_per60"] = (
-        base_df[metric]
-        / base_df["Time on ice"]
+    df[f"{metric}_per60"] = (
+        df[metric] / df["Time on ice"]
     ) * 60
 
 # =========================================================
@@ -202,7 +163,7 @@ league_avg = {}
 for metric in metrics:
 
     league_avg[metric] = (
-        base_df[f"{metric}_per60"].mean()
+        df[f"{metric}_per60"].mean()
     )
 
 # =========================================================
@@ -211,154 +172,135 @@ for metric in metrics:
 
 for metric in metrics:
 
-    base_df[f"d_{metric}"] = (
-        base_df[f"{metric}_per60"]
+    df[f"d_{metric}"] = (
+        df[f"{metric}_per60"]
         - league_avg[metric]
     )
 
 # =========================================================
-# RAW DELTA PROJECTION MODEL
+# PROJECTION SCORE
 # =========================================================
 
-base_df["Projection Score"] = (
+df["Projection Score"] = (
 
-    0.30 * base_df["d_Goals"]
+    0.30 * df["d_Goals"]
 
-    + 0.25 * base_df["d_First assist"]
+    + 0.25 * df["d_First assist"]
 
-    + 0.20 * base_df["d_xG"]
+    + 0.20 * df["d_xG"]
 
-    + 0.10 * base_df["d_Passes to the slot"]
+    + 0.10 * df["d_Passes to the slot"]
 
-    + 0.10 * base_df["d_Entries"]
+    + 0.10 * df["d_Entries"]
 
-    + 0.10 * base_df["d_Takeaways"]
+    + 0.10 * df["d_Takeaways"]
 
-    - 0.15 * base_df["d_Puck losses"]
+    - 0.15 * df["d_Puck losses"]
 
-    + 0.20 * base_df["d_Team xG when on ice"]
+    + 0.20 * df["d_Team xG when on ice"]
 
-    - 0.20 * base_df["d_Opponent's xG when on ice"]
+    - 0.20 * df["d_Opponent's xG when on ice"]
 
 )
 
 # =========================================================
-# PROJECTION PERCENTILE
+# PERCENTILE
 # =========================================================
 
-base_df["Projection Percentile"] = (
-    base_df["Projection Score"]
+df["Percentile"] = (
+    df["Projection Score"]
     .rank(pct=True)
 ) * 100
 
 # =========================================================
-# GRADE 4-10
+# 4-10 GRADE
 # =========================================================
 
-base_df["Grade"] = (
-    4 +
-    (
-        base_df["Projection Percentile"]
-        / 100
-    ) * 6
+df["Grade"] = (
+    4 + (df["Percentile"] / 100) * 6
 ).round(1)
 
 # =========================================================
-# METRIC PERCENTILES FOR SPIDERWEB
+# METRIC PERCENTILES
 # =========================================================
+
+negative_metrics = [
+    "Puck losses",
+    "Opponent's xG when on ice"
+]
 
 for metric in metrics:
 
     if metric in negative_metrics:
 
-        base_df[f"{metric}_pct"] = (
+        df[f"{metric}_pct"] = (
             1 -
-            base_df[f"{metric}_per60"]
-            .rank(pct=True)
+            df[f"{metric}_per60"].rank(pct=True)
         ) * 100
 
     else:
 
-        base_df[f"{metric}_pct"] = (
-            base_df[f"{metric}_per60"]
-            .rank(pct=True)
+        df[f"{metric}_pct"] = (
+            df[f"{metric}_per60"].rank(pct=True)
         ) * 100
 
 # =========================================================
-# UI FILTERS
-# =========================================================
-# THESE ONLY FILTER DISPLAY
-# THEY DO NOT CHANGE MODEL
+# SIDEBAR FILTERS
 # =========================================================
 
-# ---------------------------------------------------------
-# POSITION
-# ---------------------------------------------------------
+st.sidebar.header("Filters")
 
-positions = sorted(
-    base_df["Position"].dropna().unique()
+# Team filter
+teams = sorted(df["Team"].dropna().unique())
+
+selected_team = st.sidebar.selectbox(
+    "Team",
+    ["All Teams"] + teams
 )
+
+# Position filter
+positions = sorted(df["Position"].dropna().unique())
 
 selected_position = st.sidebar.selectbox(
     "Position",
-    positions
+    ["All Positions"] + positions
 )
 
-filtered_df = base_df[
-    base_df["Position"] == selected_position
-]
+# =========================================================
+# APPLY FILTERS
+# =========================================================
 
-# ---------------------------------------------------------
-# TEAM FILTERS
-# ---------------------------------------------------------
+filtered_df = df.copy()
 
-teams = sorted(
-    filtered_df["Team"].dropna().unique()
-)
+if selected_team != "All Teams":
 
-team1 = st.sidebar.selectbox(
-    "Team 1",
-    teams,
+    filtered_df = filtered_df[
+        filtered_df["Team"] == selected_team
+    ]
+
+if selected_position != "All Positions":
+
+    filtered_df = filtered_df[
+        filtered_df["Position"] == selected_position
+    ]
+
+# =========================================================
+# PLAYER SELECTORS
+# =========================================================
+
+players = sorted(filtered_df["Player"].unique())
+
+player1 = st.selectbox(
+    "Player 1",
+    players,
     index=0
 )
 
-team2 = st.sidebar.selectbox(
-    "Team 2",
-    teams,
-    index=min(1, len(teams)-1)
-)
-
-# ---------------------------------------------------------
-# PLAYER FILTERS
-# ---------------------------------------------------------
-
-team1_players = sorted(
-    filtered_df[
-        filtered_df["Team"] == team1
-    ]["Player"].unique()
-)
-
-team2_players = sorted(
-    filtered_df[
-        filtered_df["Team"] == team2
-    ]["Player"].unique()
-)
-
-st.sidebar.markdown("---")
-
-player1 = st.sidebar.selectbox(
-    "Player 1",
-    team1_players
-)
-
-player2 = st.sidebar.selectbox(
+player2 = st.selectbox(
     "Player 2",
-    team2_players
+    players,
+    index=min(1, len(players)-1)
 )
-
-# =========================================================
-# PLAYER DATA
-# =========================================================
 
 p1 = filtered_df[
     filtered_df["Player"] == player1
@@ -369,172 +311,121 @@ p2 = filtered_df[
 ].iloc[0]
 
 # =========================================================
-# PLAYER HEADER
+# PLAYER OVERVIEW
 # =========================================================
 
-top1, top2 = st.columns(2)
+col1, col2 = st.columns(2)
 
-with top1:
+with col1:
 
-    st.markdown(f"## {player1}")
+    st.subheader(player1)
 
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
+    st.metric(
         "Grade",
         p1["Grade"]
     )
 
-    c2.metric(
-        "Projection",
+    st.metric(
+        "Projection Score",
         round(
             p1["Projection Score"],
             2
         )
     )
 
-    c3.metric(
+    st.metric(
         "Percentile",
         round(
-            p1["Projection Percentile"],
+            p1["Percentile"],
             1
         )
     )
 
-with top2:
+with col2:
 
-    st.markdown(f"## {player2}")
+    st.subheader(player2)
 
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
+    st.metric(
         "Grade",
         p2["Grade"]
     )
 
-    c2.metric(
-        "Projection",
+    st.metric(
+        "Projection Score",
         round(
             p2["Projection Score"],
             2
         )
     )
 
-    c3.metric(
+    st.metric(
         "Percentile",
         round(
-            p2["Projection Percentile"],
+            p2["Percentile"],
             1
         )
     )
 
 # =========================================================
-# SPIDERWEB
+# SPIDER CHART
 # =========================================================
 
-fig = go.Figure()
+spider_metrics = [
+    "Goals",
+    "First assist",
+    "xG",
+    "Shots",
+    "Passes to the slot",
+    "Entries",
+    "Takeaways",
+    "Puck losses",
+    "Team xG when on ice",
+    "Opponent's xG when on ice"
+]
 
-# PLAYER 1
+fig = go.Figure()
 
 fig.add_trace(go.Scatterpolar(
 
     r=[
         p1[f"{m}_pct"]
-        for m in metrics
+        for m in spider_metrics
     ],
 
-    theta=metrics,
+    theta=spider_metrics,
 
     fill='toself',
 
-    name=player1,
-
-    line=dict(
-        color="#00E5FF",
-        width=3
-    ),
-
-    fillcolor="rgba(0,229,255,0.30)"
+    name=player1
 ))
-
-# PLAYER 2
 
 fig.add_trace(go.Scatterpolar(
 
     r=[
         p2[f"{m}_pct"]
-        for m in metrics
+        for m in spider_metrics
     ],
 
-    theta=metrics,
+    theta=spider_metrics,
 
     fill='toself',
 
-    name=player2,
-
-    line=dict(
-        color="#FF4B4B",
-        width=3
-    ),
-
-    fillcolor="rgba(255,75,75,0.30)"
+    name=player2
 ))
 
 fig.update_layout(
 
     polar=dict(
 
-        bgcolor="rgba(0,0,0,0)",
-
         radialaxis=dict(
-
             visible=True,
-
-            range=[0, 100],
-
-            tickfont=dict(
-                size=10
-            ),
-
-            gridcolor="rgba(255,255,255,0.15)",
-
-            linecolor="rgba(255,255,255,0.15)"
-        ),
-
-        angularaxis=dict(
-
-            tickfont=dict(
-                size=11
-            ),
-
-            gridcolor="rgba(255,255,255,0.10)",
-
-            linecolor="rgba(255,255,255,0.10)"
+            range=[0, 100]
         )
     ),
 
     showlegend=True,
 
-    legend=dict(
-        orientation="h",
-        yanchor="bottom",
-        y=1.05,
-        xanchor="center",
-        x=0.5
-    ),
-
-    height=450,
-
-    margin=dict(
-        l=40,
-        r=40,
-        t=40,
-        b=40
-    ),
-
-    paper_bgcolor="rgba(0,0,0,0)",
-
-    plot_bgcolor="rgba(0,0,0,0)"
+    height=800
 )
 
 st.plotly_chart(
@@ -543,56 +434,58 @@ st.plotly_chart(
 )
 
 # =========================================================
-# UNDERLYING METRICS
+# UNDERLYING METRICS TABLE
 # =========================================================
 
-st.subheader("Underlying Metric Percentiles")
+st.subheader("Underlying Metrics")
 
-rows = []
+metric_table = pd.DataFrame({
 
-for metric in metrics:
+    "Metric": spider_metrics,
 
-    p1_value = round(
-        p1[f"{metric}_pct"],
-        1
-    )
+    f"{player1} Per60": [
 
-    p2_value = round(
-        p2[f"{metric}_pct"],
-        1
-    )
+        round(
+            p1[f"{m}_per60"],
+            2
+        )
 
-    if p1_value > p2_value:
+        for m in spider_metrics
+    ],
 
-        p1_icon = "🟢"
-        p2_icon = "🔴"
+    f"{player2} Per60": [
 
-    elif p2_value > p1_value:
+        round(
+            p2[f"{m}_per60"],
+            2
+        )
 
-        p1_icon = "🔴"
-        p2_icon = "🟢"
+        for m in spider_metrics
+    ],
 
-    else:
+    f"{player1} Percentile": [
 
-        p1_icon = "⚪"
-        p2_icon = "⚪"
+        round(
+            p1[f"{m}_pct"],
+            1
+        )
 
-    rows.append({
+        for m in spider_metrics
+    ],
 
-        "Metric": metric,
+    f"{player2} Percentile": [
 
-        player1:
-        f"{p1_icon} {p1_value}",
+        round(
+            p2[f"{m}_pct"],
+            1
+        )
 
-        player2:
-        f"{p2_icon} {p2_value}"
-    })
-
-metric_table = pd.DataFrame(rows)
+        for m in spider_metrics
+    ]
+})
 
 st.dataframe(
     metric_table,
     use_container_width=True,
-    hide_index=True,
-    height=420
+    height=600
 )
