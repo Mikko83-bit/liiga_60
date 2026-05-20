@@ -32,13 +32,14 @@ df = pd.read_excel(FILE)
 
 try:
 
-    df = pd.read_excel(uploaded_file)
+    raw_df = pd.read_excel(
+        "Liiga 2025-2026_skaters_teams.xlsx"
+    )
 
 except Exception as e:
 
     st.error(f"Excel loading failed: {e}")
     st.stop()
-
 # =========================================================
 # CLEAN COLUMNS
 # =========================================================
