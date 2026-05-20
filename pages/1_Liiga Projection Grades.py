@@ -205,7 +205,7 @@ for metric in metrics:
 # RAW DELTA PROJECTION MODEL
 # =========================================================
 
-base_df["Projection Score"] = (
+base_df["Raw Projection"] = (
 
     0.35 * base_df["d_Goals"]
 
@@ -220,6 +220,30 @@ base_df["Projection Score"] = (
     + 0.15 * base_df["d_Team xG when on ice"]
 
     - 0.10 * base_df["d_Opponent's xG when on ice"]
+
+)
+
+# =========================================================
+# VOLUME / USAGE ADJUSTMENT
+# =========================================================
+# THIS REDUCES SMALL SAMPLE BIAS
+# =========================================================
+
+base_df["TOI Factor"] = (
+
+    base_df["Time on ice"] / 600
+
+).clip(0.50, 1.50)
+
+# =========================================================
+# FINAL PROJECTION SCORE
+# =========================================================
+
+base_df["Projection Score"] = (
+
+    base_df["Raw Projection"]
+
+    * base_df["TOI Factor"]
 
 )
 
@@ -344,7 +368,7 @@ with top1:
 
     st.markdown(f"## {player1}")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
 
     c1.metric(
         "Grade",
@@ -367,11 +391,19 @@ with top1:
         )
     )
 
+    c4.metric(
+        "TOI Factor",
+        round(
+            p1["TOI Factor"],
+            2
+        )
+    )
+
 with top2:
 
     st.markdown(f"## {player2}")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
 
     c1.metric(
         "Grade",
@@ -391,6 +423,14 @@ with top2:
         round(
             p2["Projection Percentile"],
             1
+        )
+    )
+
+    c4.metric(
+        "TOI Factor",
+        round(
+            p2["TOI Factor"],
+            2
         )
     )
 
