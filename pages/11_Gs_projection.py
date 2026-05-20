@@ -7,7 +7,7 @@ import numpy as np
 # =========================================================
 
 st.set_page_config(
-    page_title="Gs_projection",
+    page_title="Gs_Projection",
     layout="wide"
 )
 
@@ -18,11 +18,12 @@ st.set_page_config(
 st.title("Projection Model")
 
 st.markdown("""
-Projection-oriented player model based on:
+Projection-oriented player model using:
 
-- Relative-to-league performance
-- Usage-adjusted production
-- Sustainable underlying metrics
+- Relative production
+- Relative on-ice impact
+- Team-context adjusted metrics
+- Usage adjustment
 """)
 
 # =========================================================
@@ -31,13 +32,36 @@ Projection-oriented player model based on:
 
 FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
+# ---------------------------------------------------------
+# PLAYERS
+# ---------------------------------------------------------
+
 try:
 
-    df = pd.read_excel(FILE)
+    df = pd.read_excel(
+        FILE,
+        sheet_name=0
+    )
 
 except Exception as e:
 
-    st.error(f"Excel loading failed: {e}")
+    st.error(f"Player sheet loading failed: {e}")
+    st.stop()
+
+# ---------------------------------------------------------
+# TEAMS
+# ---------------------------------------------------------
+
+try:
+
+    teams_df = pd.read_excel(
+        FILE,
+        sheet_name="teams"
+    )
+
+except Exception as e:
+
+    st.error(f"Teams sheet loading failed: {e}")
     st.stop()
 
 # =========================================================
@@ -45,9 +69,10 @@ except Exception as e:
 # =========================================================
 
 df.columns = df.columns.str.strip()
+teams_df.columns = teams_df.columns.str.strip()
 
 # =========================================================
-# REQUIRED COLUMNS
+# REQUIRED PLAYER COLUMNS
 # =========================================================
 
 required_columns = [
@@ -61,6 +86,7 @@ required_columns = [
 
     "Goals",
     "First assist",
+
     "xG",
 
     "Pre-shots passes",
@@ -78,7 +104,28 @@ missing = [
 
 if len(missing) > 0:
 
-    st.error(f"Missing columns: {missing}")
+    st.error(f"Missing player columns: {missing}")
+    st.stop()
+
+# =========================================================
+# REQUIRED TEAM COLUMNS
+# =========================================================
+
+team_required = [
+    "Team",
+    "Games",
+    "xGF",
+    "xGA"
+]
+
+team_missing = [
+    c for c in team_required
+    if c not in teams_df.columns
+]
+
+if len(team_missing) > 0:
+
+    st.error(f"Missing team columns: {team_missing}")
     st.stop()
 
 # =========================================================
@@ -91,6 +138,19 @@ for col in numeric_cols:
 
     df[col] = pd.to_numeric(
         df[col],
+        errors="coerce"
+    )
+
+team_numeric = [
+    "Games",
+    "xGF",
+    "xGA"
+]
+
+for col in team_numeric:
+
+    teams_df[col] = pd.to_numeric(
+        teams_df[col],
         errors="coerce"
     )
 
@@ -159,7 +219,7 @@ selected_age = st.sidebar.slider(
 )
 
 # ---------------------------------------------------------
-# MINIMUM TOI
+# MIN TOI
 # ---------------------------------------------------------
 
 min_toi = st.sidebar.slider(
@@ -171,7 +231,7 @@ min_toi = st.sidebar.slider(
 )
 
 # ---------------------------------------------------------
-# MINIMUM GAMES
+# MIN GP
 # ---------------------------------------------------------
 
 min_games = st.sidebar.slider(
@@ -211,7 +271,7 @@ if len(df) == 0:
     st.stop()
 
 # =========================================================
-# PER60 METRICS
+# PER60
 # =========================================================
 
 metrics_per60 = [
@@ -219,16 +279,55 @@ metrics_per60 = [
     "Goals",
     "First assist",
     "xG",
+
     "Pre-shots passes",
+
     "Puck losses"
 ]
 
 for metric in metrics_per60:
 
     df[f"{metric}_per60"] = (
+
         df[metric]
+
         / df["Time on ice"]
+
     ) * 60
+
+# =========================================================
+# TEAM MAPS
+# =========================================================
+
+teams_df["xGF_per_game"] = (
+
+    teams_df["xGF"]
+
+    / teams_df["Games"]
+)
+
+teams_df["xGA_per_game"] = (
+
+    teams_df["xGA"]
+
+    / teams_df["Games"]
+)
+
+team_xgf_map = dict(
+
+    zip(
+        teams_df["Team"],
+        teams_df["xGF_per_game"]
+    )
+)
+
+team_xga_map = dict(
+
+    zip(
+        teams_df["Team"],
+        teams_df["xGA_per_game"]
+    )
+)
 
 # =========================================================
 # LEAGUE AVERAGES
@@ -241,11 +340,10 @@ league_metrics = [
     "Goals_per60",
     "First assist_per60",
     "xG_per60",
-    "Pre-shots passes_per60",
-    "Puck losses_per60",
 
-    "Team xG when on ice",
-    "Opponent's xG when on ice"
+    "Pre-shots passes_per60",
+
+    "Puck losses_per60"
 ]
 
 for metric in league_metrics:
@@ -258,12 +356,20 @@ for metric in league_metrics:
 # DELTA ABOVE AVERAGE
 # =========================================================
 
+# ---------------------------------------------------------
+# GOALS
+# ---------------------------------------------------------
+
 df["dGoals"] = (
 
     df["Goals_per60"]
 
     - league_avg["Goals_per60"]
 )
+
+# ---------------------------------------------------------
+# PRIMARY ASSISTS
+# ---------------------------------------------------------
 
 df["dA1"] = (
 
@@ -272,12 +378,20 @@ df["dA1"] = (
     - league_avg["First assist_per60"]
 )
 
+# ---------------------------------------------------------
+# xG
+# ---------------------------------------------------------
+
 df["dxG"] = (
 
     df["xG_per60"]
 
     - league_avg["xG_per60"]
 )
+
+# ---------------------------------------------------------
+# PRE-SHOTS
+# ---------------------------------------------------------
 
 df["dPreShot"] = (
 
@@ -287,7 +401,7 @@ df["dPreShot"] = (
 )
 
 # ---------------------------------------------------------
-# REVERSE METRIC
+# PUCK LOSSES (REVERSE)
 # ---------------------------------------------------------
 
 df["dPuckLoss"] = (
@@ -297,24 +411,28 @@ df["dPuckLoss"] = (
     - df["Puck losses_per60"]
 )
 
+# =========================================================
+# RELATIVE TEAM IMPACT
+# =========================================================
+
 # ---------------------------------------------------------
-# ON-ICE xG
+# RELATIVE xGF
 # ---------------------------------------------------------
 
-df["dxGF"] = (
+df["Rel xGF"] = (
 
     df["Team xG when on ice"]
 
-    - league_avg["Team xG when on ice"]
+    - df["Team"].map(team_xgf_map)
 )
 
 # ---------------------------------------------------------
-# REVERSE METRIC
+# RELATIVE xGA
 # ---------------------------------------------------------
 
-df["dxGA"] = (
+df["Rel xGA"] = (
 
-    league_avg["Opponent's xG when on ice"]
+    df["Team"].map(team_xga_map)
 
     - df["Opponent's xG when on ice"]
 )
@@ -323,21 +441,21 @@ df["dxGA"] = (
 # PROJECTION SCORE
 # =========================================================
 
-df["Projection Score Raw"] = (
+df["Projection Raw"] = (
 
-    (0.30 * df["dGoals"])
+    (0.22 * df["dGoals"])
 
-    + (0.30 * df["dA1"])
+    + (0.28 * df["dA1"])
 
-    + (0.20 * df["dxG"])
+    + (0.22 * df["dxG"])
 
-    + (0.15 * df["dxGF"])
+    + (0.18 * df["dPreShot"])
 
-    + (0.15 * df["dxGA"])
+    + (0.12 * df["Rel xGF"])
 
-    + (0.12 * df["dPreShot"])
+    + (0.12 * df["Rel xGA"])
 
-    + (0.08 * df["dPuckLoss"])
+    + (0.06 * df["dPuckLoss"])
 )
 
 # =========================================================
@@ -361,7 +479,7 @@ df["TOI Factor"] = np.sqrt(
 
 df["Projection Score"] = (
 
-    df["Projection Score Raw"]
+    df["Projection Raw"]
 
     * df["TOI Factor"]
 )
@@ -410,7 +528,7 @@ df = df.reset_index(drop=True)
 df["Rank"] = df.index + 1
 
 # =========================================================
-# DISPLAY TABLE
+# DISPLAY
 # =========================================================
 
 st.markdown("## Projection Rankings")
@@ -432,12 +550,13 @@ show_cols = [
 
     "Goals_per60",
     "First assist_per60",
+
     "xG_per60",
 
     "Pre-shots passes_per60",
 
-    "Team xG when on ice",
-    "Opponent's xG when on ice"
+    "Rel xGF",
+    "Rel xGA"
 ]
 
 display_df = df[show_cols].copy()
@@ -459,19 +578,20 @@ display_df.columns = [
 
     "Goals/60",
     "A1/60",
+
     "xG/60",
 
     "PreShots/60",
 
-    "Team xG",
-    "Opp xG"
+    "Rel xGF",
+    "Rel xGA"
 ]
 
 # =========================================================
 # ROUNDING
 # =========================================================
 
-numeric_round_cols = [
+round_cols = [
 
     "Age",
     "TOI",
@@ -481,16 +601,17 @@ numeric_round_cols = [
 
     "Goals/60",
     "A1/60",
+
     "xG/60",
 
     "PreShots/60",
 
-    "Team xG",
-    "Opp xG"
+    "Rel xGF",
+    "Rel xGA"
 ]
 
-display_df[numeric_round_cols] = (
-    display_df[numeric_round_cols]
+display_df[round_cols] = (
+    display_df[round_cols]
     .round(2)
 )
 
@@ -501,6 +622,6 @@ display_df[numeric_round_cols] = (
 st.dataframe(
     display_df,
     use_container_width=True,
-    height=850,
+    height=900,
     hide_index=True
 )
