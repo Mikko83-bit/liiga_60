@@ -21,35 +21,35 @@ st.markdown("""
 Projection-oriented player model using:
 
 - Relative production
-- Relative on-ice impact
-- Team-adjusted xG environment
-- Usage adjustment
+- Team-adjusted xG impact
+- Usage-adjusted scoring
+- Sustainable offensive metrics
 """)
 
 # =========================================================
-# LOAD EXCEL
+# LOAD DATA
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 # ---------------------------------------------------------
-# PLAYER SHEET
+# SKATERS
 # ---------------------------------------------------------
 
 try:
 
     df = pd.read_excel(
         FILE,
-        sheet_name=0
+        sheet_name="Skaters"
     )
 
 except Exception as e:
 
-    st.error(f"Failed loading player sheet: {e}")
+    st.error(f"Failed loading Skaters sheet: {e}")
     st.stop()
 
 # ---------------------------------------------------------
-# TEAMS SHEET
+# TEAMS
 # ---------------------------------------------------------
 
 try:
@@ -65,7 +65,7 @@ except Exception as e:
     st.stop()
 
 # =========================================================
-# CLEAN COLUMNS
+# CLEAN COLUMN NAMES
 # =========================================================
 
 df.columns = (
@@ -83,14 +83,16 @@ teams_df.columns = (
 )
 
 # =========================================================
-# REQUIRED PLAYER COLUMNS
+# REQUIRED COLUMNS
 # =========================================================
 
-required_columns = [
+required_player_columns = [
 
     "Player",
     "Team",
     "Position",
+
+    "Date of birth",
 
     "Games played",
     "Time on ice",
@@ -105,14 +107,25 @@ required_columns = [
     "Team xG when on ice",
     "Opponent's xG when on ice",
 
-    "Puck losses",
-
-    "Date of birth"
+    "Puck losses"
 ]
+
+required_team_columns = [
+
+    "Team",
+    "Games",
+
+    "xGF",
+    "xGA"
+]
+
+# ---------------------------------------------------------
+# CHECK PLAYER COLUMNS
+# ---------------------------------------------------------
 
 missing_player_cols = [
 
-    col for col in required_columns
+    col for col in required_player_columns
     if col not in df.columns
 ]
 
@@ -126,22 +139,13 @@ if len(missing_player_cols) > 0:
 
     st.stop()
 
-# =========================================================
-# REQUIRED TEAM COLUMNS
-# =========================================================
-
-required_team_cols = [
-
-    "Team",
-    "Games",
-
-    "xGF",
-    "xGA"
-]
+# ---------------------------------------------------------
+# CHECK TEAM COLUMNS
+# ---------------------------------------------------------
 
 missing_team_cols = [
 
-    col for col in required_team_cols
+    col for col in required_team_columns
     if col not in teams_df.columns
 ]
 
@@ -210,12 +214,11 @@ df = df.replace(
 df = df.fillna(0)
 
 # =========================================================
-# AGE FIX
+# AGE
 # =========================================================
 
 df["Date of birth"] = pd.to_datetime(
     df["Date of birth"],
-    format="%Y-%m-%d",
     errors="coerce"
 )
 
@@ -225,12 +228,10 @@ df["Age"] = (
     (
         today - df["Date of birth"]
     ).dt.days / 365.25
-)
-
-df["Age"] = df["Age"].round(1)
+).round(1)
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR FILTERS
 # =========================================================
 
 st.sidebar.header("Filters")
@@ -385,6 +386,7 @@ league_avg = {}
 league_metrics = [
 
     "Goals_per60",
+
     "First assist_per60",
 
     "xG_per60",
@@ -576,7 +578,7 @@ df = df.reset_index(drop=True)
 df["Rank"] = df.index + 1
 
 # =========================================================
-# DISPLAY TABLE
+# DISPLAY
 # =========================================================
 
 st.markdown("## Projection Rankings")
@@ -674,9 +676,7 @@ round_cols = [
 ]
 
 display_df[round_cols] = (
-
     display_df[round_cols]
-
     .round(2)
 )
 
