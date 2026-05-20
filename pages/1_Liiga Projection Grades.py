@@ -12,6 +12,43 @@ st.set_page_config(
     layout="wide"
 )
 
+# =========================================================
+# CUSTOM CSS
+# =========================================================
+
+st.markdown("""
+<style>
+
+.metric-container {
+    background-color: #111827;
+    padding: 20px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.metric-title {
+    font-size: 15px;
+    color: #9CA3AF;
+}
+
+.metric-value {
+    font-size: 42px;
+    font-weight: bold;
+    color: white;
+}
+
+.metric-sub {
+    font-size: 14px;
+    color: #9CA3AF;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# TITLE
+# =========================================================
+
 st.title("Liiga Projection Grade Model")
 
 # =========================================================
@@ -111,10 +148,6 @@ raw_df = raw_df[
 
 st.sidebar.header("Filters")
 
-# ---------------------------------------------------------
-# MINIMUM TOI
-# ---------------------------------------------------------
-
 MIN_TOI = st.sidebar.slider(
     "Minimum TOI",
     min_value=0,
@@ -122,10 +155,6 @@ MIN_TOI = st.sidebar.slider(
     value=200,
     step=10
 )
-
-# ---------------------------------------------------------
-# MINIMUM GAMES
-# ---------------------------------------------------------
 
 MIN_GAMES = st.sidebar.slider(
     "Minimum Games",
@@ -224,9 +253,7 @@ base_df["Raw Projection"] = (
 )
 
 # =========================================================
-# VOLUME / USAGE ADJUSTMENT
-# =========================================================
-# THIS REDUCES SMALL SAMPLE BIAS
+# TOI FACTOR
 # =========================================================
 
 base_df["TOI Factor"] = (
@@ -236,7 +263,7 @@ base_df["TOI Factor"] = (
 ).clip(0.50, 1.50)
 
 # =========================================================
-# FINAL PROJECTION SCORE
+# FINAL PROJECTION
 # =========================================================
 
 base_df["Projection Score"] = (
@@ -257,7 +284,7 @@ base_df["Projection Percentile"] = (
 ) * 100
 
 # =========================================================
-# GRADE 4-10
+# GRADE
 # =========================================================
 
 base_df["Grade"] = (
@@ -440,8 +467,6 @@ with top2:
 
 fig = go.Figure()
 
-# PLAYER 1
-
 fig.add_trace(go.Scatterpolar(
 
     r=[
@@ -462,8 +487,6 @@ fig.add_trace(go.Scatterpolar(
 
     fillcolor="rgba(0,229,255,0.30)"
 ))
-
-# PLAYER 2
 
 fig.add_trace(go.Scatterpolar(
 
@@ -552,7 +575,7 @@ st.plotly_chart(
 # UNDERLYING METRICS
 # =========================================================
 
-st.subheader("Underlying Metrics")
+st.markdown("## Underlying Metrics")
 
 rows = []
 
@@ -568,7 +591,13 @@ for metric in metrics:
         2
     )
 
-    # BETTER VALUE LOGIC
+    p1_pct = round(
+        p1[f"{metric}_pct"]
+    )
+
+    p2_pct = round(
+        p2[f"{metric}_pct"]
+    )
 
     if metric in negative_metrics:
 
@@ -609,16 +638,31 @@ for metric in metrics:
         "Metric": metric,
 
         player1:
-        f"{p1_icon} {p1_per60}",
+        f"{p1_icon} {p1_per60} ({p1_pct}%)",
 
         player2:
-        f"{p2_icon} {p2_per60}"
+        f"{p2_icon} {p2_per60} ({p2_pct}%)"
     })
 
 metric_table = pd.DataFrame(rows)
 
+styled_table = metric_table.style.set_properties(**{
+    'text-align': 'center',
+    'font-size': '16px',
+    'padding': '10px'
+}).set_table_styles([
+    {
+        'selector': 'th',
+        'props': [
+            ('text-align', 'center'),
+            ('font-size', '16px'),
+            ('font-weight', 'bold')
+        ]
+    }
+])
+
 st.dataframe(
-    metric_table,
+    styled_table,
     use_container_width=True,
     hide_index=True,
     height=420
