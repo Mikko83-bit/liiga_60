@@ -27,7 +27,7 @@ defensive and impact metrics.
 # LOAD DATA
 # =========================================================
 
-FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 try:
 
