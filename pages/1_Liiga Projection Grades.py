@@ -69,6 +69,7 @@ with st.expander("Show Data Columns"):
 
 required_columns = [
     "Player",
+    "Team",
     "Time on ice",
     "Goals",
     "First assist",
@@ -101,13 +102,13 @@ if len(missing_columns) > 0:
 
 df = df.copy()
 
-# Muunna TOI numeroksi
+# TOI numeroksi
 df["Time on ice"] = pd.to_numeric(
     df["Time on ice"],
     errors="coerce"
 )
 
-# Poista puuttuvat TOI-rivit
+# Poista puuttuvat TOI
 df = df.dropna(subset=["Time on ice"])
 
 # Poista 0 TOI
@@ -131,7 +132,7 @@ metrics = [
 ]
 
 # =========================================================
-# CONVERT TO NUMERIC
+# NUMERIC CONVERSION
 # =========================================================
 
 for metric in metrics:
@@ -177,8 +178,6 @@ for metric in metrics:
 # =========================================================
 # PROJECTION SCORE
 # =========================================================
-# BASED ON RELATIVE PERFORMANCE
-# =========================================================
 
 df["Projection Score"] = (
 
@@ -212,7 +211,7 @@ df["Percentile"] = (
 ) * 100
 
 # =========================================================
-# GRADE 4-10
+# GRADE
 # =========================================================
 
 df["Grade"] = (
@@ -229,16 +228,42 @@ df = df.sort_values(
 )
 
 # =========================================================
+# SIDEBAR FILTERS
+# =========================================================
+
+st.sidebar.header("Filters")
+
+# Team filter
+teams = sorted(df["Team"].dropna().unique())
+
+selected_team = st.sidebar.selectbox(
+    "Select Team",
+    ["All Teams"] + teams
+)
+
+# =========================================================
+# APPLY FILTERS
+# =========================================================
+
+filtered_df = df.copy()
+
+if selected_team != "All Teams":
+
+    filtered_df = filtered_df[
+        filtered_df["Team"] == selected_team
+    ]
+
+# =========================================================
 # PLAYER SELECT
 # =========================================================
 
 player = st.selectbox(
     "Select Player",
-    sorted(df["Player"].unique())
+    sorted(filtered_df["Player"].unique())
 )
 
-player_df = df[
-    df["Player"] == player
+player_df = filtered_df[
+    filtered_df["Player"] == player
 ]
 
 # =========================================================
@@ -246,6 +271,10 @@ player_df = df[
 # =========================================================
 
 st.subheader(player)
+
+team_name = player_df["Team"].iloc[0]
+
+st.write(f"Team: {team_name}")
 
 col1, col2, col3 = st.columns(3)
 
@@ -320,13 +349,14 @@ st.subheader("All Players")
 
 table_columns = [
     "Player",
+    "Team",
     "Projection Score",
     "Percentile",
     "Grade"
 ]
 
 st.dataframe(
-    df[table_columns],
+    filtered_df[table_columns],
     use_container_width=True,
     height=700
 )
