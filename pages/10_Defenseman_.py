@@ -19,7 +19,8 @@ st.set_page_config(
 st.title("Defenseman Comparison")
 
 st.markdown("""
-Compare defensemen using real underlying metrics.
+Compare defensemen using offensive, transition and
+defensive underlying metrics.
 """)
 
 # =========================================================
@@ -53,13 +54,14 @@ required_columns = [
     "Position",
     "Games played",
     "Time on ice",
-    "Entries",
-    "Breakouts",
+    "Goals",
+    "Points",
+    "First assist",
+    "xG",
     "Entries via pass",
     "Breakouts via pass",
     "Takeaways in DZ",
     "Puck losses",
-    "Puck battles won, %",
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
@@ -131,7 +133,7 @@ df = df[
 ]
 
 # =========================================================
-# TEAM / PLAYER FILTERS
+# TEAM FILTERS
 # =========================================================
 
 teams = sorted(
@@ -175,12 +177,14 @@ player2 = st.sidebar.selectbox(
 )
 
 # =========================================================
-# PER60
+# PER60 METRICS
 # =========================================================
 
 per60_metrics = [
-    "Entries",
-    "Breakouts",
+    "Goals",
+    "Points",
+    "First assist",
+    "xG",
     "Entries via pass",
     "Breakouts via pass",
     "Takeaways in DZ",
@@ -195,16 +199,22 @@ for metric in per60_metrics:
     ) * 60
 
 # =========================================================
-# METRICS FOR DISPLAY
+# METRICS
 # =========================================================
 
 metrics = {
 
-    "Entries":
-    "Entries_per60",
+    "Goals":
+    "Goals_per60",
 
-    "Breakouts":
-    "Breakouts_per60",
+    "Points":
+    "Points_per60",
+
+    "First assist":
+    "First assist_per60",
+
+    "xG":
+    "xG_per60",
 
     "Entries via pass":
     "Entries via pass_per60",
@@ -217,9 +227,6 @@ metrics = {
 
     "Puck losses":
     "Puck losses_per60",
-
-    "Battle win %":
-    "Puck battles won, %",
 
     "Team xG":
     "Team xG when on ice",
@@ -238,33 +245,6 @@ reverse_metrics = [
 ]
 
 # =========================================================
-# PERCENTILES
-# =========================================================
-
-for display_name, metric_col in metrics.items():
-
-    if display_name in reverse_metrics:
-
-        df[f"{display_name}_pct"] = (
-            (
-                df[metric_col].rank(
-                    pct=True,
-                    ascending=False
-                )
-            ) * 100
-        )
-
-    else:
-
-        df[f"{display_name}_pct"] = (
-            (
-                df[metric_col].rank(
-                    pct=True
-                )
-            ) * 100
-        )
-
-# =========================================================
 # CLEAN
 # =========================================================
 
@@ -274,6 +254,31 @@ df = df.replace(
 )
 
 df = df.fillna(0)
+
+# =========================================================
+# PERCENTILES
+# =========================================================
+
+for display_name, metric_col in metrics.items():
+
+    if display_name in reverse_metrics:
+
+        df[f"{display_name}_pct"] = (
+            df[metric_col]
+            .rank(
+                pct=True,
+                ascending=False
+            )
+        ) * 100
+
+    else:
+
+        df[f"{display_name}_pct"] = (
+            df[metric_col]
+            .rank(
+                pct=True
+            )
+        ) * 100
 
 # =========================================================
 # PLAYER DATA
@@ -401,7 +406,7 @@ fig.update_layout(
 
     showlegend=True,
 
-    height=650,
+    height=700,
 
     paper_bgcolor="rgba(0,0,0,0)",
 
@@ -443,9 +448,9 @@ for display_name, metric_col in metrics.items():
         0
     )
 
-    # -----------------------------------------------------
+    # =====================================================
     # REVERSE LOGIC
-    # -----------------------------------------------------
+    # =====================================================
 
     if display_name in reverse_metrics:
 
@@ -498,5 +503,5 @@ st.dataframe(
     table,
     use_container_width=True,
     hide_index=True,
-    height=520
+    height=560
 )
