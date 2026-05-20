@@ -7,7 +7,7 @@ import numpy as np
 # =========================================================
 
 st.set_page_config(
-    page_title="Gs_Projection",
+    page_title="Projection Model",
     layout="wide"
 )
 
@@ -18,7 +18,7 @@ st.set_page_config(
 st.title("Projection Model")
 
 st.markdown("""
-Projection-oriented model using:
+Projection-oriented player model using:
 
 - Relative production
 - Relative on-ice impact
@@ -30,10 +30,10 @@ Projection-oriented model using:
 # LOAD EXCEL
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 # ---------------------------------------------------------
-# PLAYERS SHEET
+# PLAYER SHEET
 # ---------------------------------------------------------
 
 try:
@@ -71,15 +71,15 @@ except Exception as e:
 df.columns = (
     df.columns
     .str.strip()
-    .str.replace("\n", "")
-    .str.replace("\r", "")
+    .str.replace("\n", "", regex=False)
+    .str.replace("\r", "", regex=False)
 )
 
 teams_df.columns = (
     teams_df.columns
     .str.strip()
-    .str.replace("\n", "")
-    .str.replace("\r", "")
+    .str.replace("\n", "", regex=False)
+    .str.replace("\r", "", regex=False)
 )
 
 # =========================================================
@@ -105,7 +105,9 @@ required_columns = [
     "Team xG when on ice",
     "Opponent's xG when on ice",
 
-    "Puck losses"
+    "Puck losses",
+
+    "Date of birth"
 ]
 
 missing_player_cols = [
@@ -119,6 +121,8 @@ if len(missing_player_cols) > 0:
     st.error(
         f"Missing player columns: {missing_player_cols}"
     )
+
+    st.write(df.columns.tolist())
 
     st.stop()
 
@@ -206,31 +210,24 @@ df = df.replace(
 df = df.fillna(0)
 
 # =========================================================
-# AGE
+# AGE FIX
 # =========================================================
 
-if "Date of birth" in df.columns:
+df["Date of birth"] = pd.to_datetime(
+    df["Date of birth"],
+    format="%Y-%m-%d",
+    errors="coerce"
+)
 
-    df["Date of birth"] = pd.to_datetime(
-        df["Date of birth"],
-        errors="coerce"
-    )
+today = pd.Timestamp.today()
 
-    today = pd.Timestamp.today()
+df["Age"] = (
+    (
+        today - df["Date of birth"]
+    ).dt.days / 365.25
+)
 
-    df["Age"] = (
-
-        (
-            today - df["Date of birth"]
-        ).dt.days
-
-        / 365.25
-
-    ).round(1)
-
-else:
-
-    df["Age"] = 25
+df["Age"] = df["Age"].round(1)
 
 # =========================================================
 # SIDEBAR
@@ -252,7 +249,7 @@ selected_position = st.sidebar.selectbox(
 )
 
 # ---------------------------------------------------------
-# AGE
+# MAX AGE
 # ---------------------------------------------------------
 
 selected_age = st.sidebar.slider(
@@ -263,7 +260,7 @@ selected_age = st.sidebar.slider(
 )
 
 # ---------------------------------------------------------
-# TOI
+# MIN TOI
 # ---------------------------------------------------------
 
 min_toi = st.sidebar.slider(
@@ -275,7 +272,7 @@ min_toi = st.sidebar.slider(
 )
 
 # ---------------------------------------------------------
-# GAMES
+# MIN GP
 # ---------------------------------------------------------
 
 min_games = st.sidebar.slider(
@@ -286,7 +283,7 @@ min_games = st.sidebar.slider(
 )
 
 # =========================================================
-# FILTERS
+# APPLY FILTERS
 # =========================================================
 
 df = df[
@@ -316,7 +313,7 @@ if len(df) == 0:
     st.stop()
 
 # =========================================================
-# PER60
+# PER60 METRICS
 # =========================================================
 
 per60_metrics = [
@@ -360,7 +357,7 @@ teams_df["xGA_per_game"] = (
 )
 
 # ---------------------------------------------------------
-# MAPS
+# TEAM MAPS
 # ---------------------------------------------------------
 
 team_xgf_map = dict(
@@ -579,7 +576,7 @@ df = df.reset_index(drop=True)
 df["Rank"] = df.index + 1
 
 # =========================================================
-# DISPLAY
+# DISPLAY TABLE
 # =========================================================
 
 st.markdown("## Projection Rankings")
@@ -603,6 +600,7 @@ show_cols = [
     "Percentile",
 
     "Goals_per60",
+
     "First assist_per60",
 
     "xG_per60",
@@ -610,6 +608,7 @@ show_cols = [
     "Pre-shots passes_per60",
 
     "Rel xGF",
+
     "Rel xGA"
 ]
 
@@ -625,6 +624,7 @@ display_df.columns = [
     "Age",
 
     "GP",
+
     "TOI",
 
     "Grade",
@@ -634,6 +634,7 @@ display_df.columns = [
     "Percentile",
 
     "Goals/60",
+
     "A1/60",
 
     "xG/60",
@@ -641,6 +642,7 @@ display_df.columns = [
     "PreShots/60",
 
     "Rel xGF",
+
     "Rel xGA"
 ]
 
