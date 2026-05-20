@@ -15,13 +15,13 @@ st.set_page_config(
 st.title("Liiga Projection Grade Model")
 
 st.write("""
-Model logic:
-1. Raw data
-2. Per60 metrics
-3. League-relative delta metrics
-4. Weighted projection score
-5. Percentile
-6. Grade (4-10)
+Model Logic:
+- Raw data
+- Per60 metrics
+- League-relative delta metrics
+- Weighted projection score
+- Percentile
+- Grade (4–10)
 """)
 
 # =========================================================
@@ -52,7 +52,7 @@ except Exception as e:
     st.stop()
 
 # =========================================================
-# CLEAN COLUMNS
+# CLEAN COLUMN NAMES
 # =========================================================
 
 df.columns = df.columns.str.strip()
@@ -65,6 +65,7 @@ required_columns = [
     "Player",
     "Team",
     "Position",
+    "Games played",
     "Time on ice",
     "Goals",
     "First assist",
@@ -94,27 +95,134 @@ if len(missing_columns) > 0:
 
 df = df.copy()
 
-df["Time on ice"] = pd.to_numeric(
-    df["Time on ice"],
-    errors="coerce"
-)
+numeric_columns = [
+    "Games played",
+    "Time on ice",
+    "Goals",
+    "First assist",
+    "xG",
+    "Shots",
+    "Passes to the slot",
+    "Entries",
+    "Takeaways",
+    "Puck losses",
+    "Team xG when on ice",
+    "Opponent's xG when on ice"
+]
+
+for col in numeric_columns:
+
+    df[col] = pd.to_numeric(
+        df[col],
+        errors="coerce"
+    )
 
 df = df.dropna(subset=["Time on ice"])
 
 df = df[df["Time on ice"] > 0]
 
 # =========================================================
-# MINIMUM TOI
+# SIDEBAR FILTERS
 # =========================================================
+
+st.sidebar.header("Filters")
+
+# ---------------------------------------------------------
+# MINIMUM TOI
+# ---------------------------------------------------------
 
 MIN_TOI = st.sidebar.slider(
     "Minimum TOI",
-    0,
-    1000,
-    200
+    min_value=0,
+    max_value=1000,
+    value=200,
+    step=10
 )
 
-df = df[df["Time on ice"] >= MIN_TOI]
+# ---------------------------------------------------------
+# MINIMUM GAMES
+# ---------------------------------------------------------
+
+MIN_GAMES = st.sidebar.slider(
+    "Minimum Games",
+    min_value=0,
+    max_value=int(df["Games played"].max()),
+    value=5,
+    step=1
+)
+
+# ---------------------------------------------------------
+# APPLY MIN FILTERS
+# ---------------------------------------------------------
+
+df = df[
+    (df["Time on ice"] >= MIN_TOI)
+]
+
+df = df[
+    (df["Games played"] >= MIN_GAMES)
+]
+
+# ---------------------------------------------------------
+# POSITION FILTER
+# ---------------------------------------------------------
+
+positions = sorted(
+    df["Position"].dropna().unique()
+)
+
+selected_position = st.sidebar.selectbox(
+    "Position",
+    positions
+)
+
+df = df[
+    df["Position"] == selected_position
+]
+
+# ---------------------------------------------------------
+# TEAM FILTERS
+# ---------------------------------------------------------
+
+teams = sorted(
+    df["Team"].dropna().unique()
+)
+
+team1 = st.sidebar.selectbox(
+    "Team 1",
+    teams,
+    index=0
+)
+
+team2 = st.sidebar.selectbox(
+    "Team 2",
+    teams,
+    index=min(1, len(teams)-1)
+)
+
+# ---------------------------------------------------------
+# PLAYER FILTERS
+# ---------------------------------------------------------
+
+team1_players = sorted(
+    df[df["Team"] == team1]["Player"].unique()
+)
+
+team2_players = sorted(
+    df[df["Team"] == team2]["Player"].unique()
+)
+
+st.sidebar.markdown("---")
+
+player1 = st.sidebar.selectbox(
+    "Player 1",
+    team1_players
+)
+
+player2 = st.sidebar.selectbox(
+    "Player 2",
+    team2_players
+)
 
 # =========================================================
 # METRICS
@@ -132,17 +240,6 @@ metrics = [
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
-
-# =========================================================
-# NUMERIC CONVERSION
-# =========================================================
-
-for metric in metrics:
-
-    df[metric] = pd.to_numeric(
-        df[metric],
-        errors="coerce"
-    ).fillna(0)
 
 # =========================================================
 # PER60
@@ -213,7 +310,7 @@ df["Percentile"] = (
 ) * 100
 
 # =========================================================
-# 4-10 GRADE
+# GRADE
 # =========================================================
 
 df["Grade"] = (
@@ -245,69 +342,15 @@ for metric in metrics:
         ) * 100
 
 # =========================================================
-# SIDEBAR FILTERS
+# PLAYER DATA
 # =========================================================
 
-st.sidebar.header("Filters")
-
-# Team filter
-teams = sorted(df["Team"].dropna().unique())
-
-selected_team = st.sidebar.selectbox(
-    "Team",
-    ["All Teams"] + teams
-)
-
-# Position filter
-positions = sorted(df["Position"].dropna().unique())
-
-selected_position = st.sidebar.selectbox(
-    "Position",
-    ["All Positions"] + positions
-)
-
-# =========================================================
-# APPLY FILTERS
-# =========================================================
-
-filtered_df = df.copy()
-
-if selected_team != "All Teams":
-
-    filtered_df = filtered_df[
-        filtered_df["Team"] == selected_team
-    ]
-
-if selected_position != "All Positions":
-
-    filtered_df = filtered_df[
-        filtered_df["Position"] == selected_position
-    ]
-
-# =========================================================
-# PLAYER SELECTORS
-# =========================================================
-
-players = sorted(filtered_df["Player"].unique())
-
-player1 = st.selectbox(
-    "Player 1",
-    players,
-    index=0
-)
-
-player2 = st.selectbox(
-    "Player 2",
-    players,
-    index=min(1, len(players)-1)
-)
-
-p1 = filtered_df[
-    filtered_df["Player"] == player1
+p1 = df[
+    df["Player"] == player1
 ].iloc[0]
 
-p2 = filtered_df[
-    filtered_df["Player"] == player2
+p2 = df[
+    df["Player"] == player2
 ].iloc[0]
 
 # =========================================================
@@ -425,7 +468,7 @@ fig.update_layout(
 
     showlegend=True,
 
-    height=800
+    height=500
 )
 
 st.plotly_chart(
@@ -434,7 +477,7 @@ st.plotly_chart(
 )
 
 # =========================================================
-# UNDERLYING METRICS TABLE
+# UNDERLYING METRICS
 # =========================================================
 
 st.subheader("Underlying Metrics")
@@ -487,5 +530,5 @@ metric_table = pd.DataFrame({
 st.dataframe(
     metric_table,
     use_container_width=True,
-    height=600
+    height=500
 )
