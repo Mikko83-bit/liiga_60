@@ -19,15 +19,15 @@ st.set_page_config(
 st.title("Defenseman Comparison")
 
 st.markdown("""
-Compare defensemen using offensive, transition and
-defensive underlying metrics.
+Compare defensemen using offensive, transition,
+defensive and impact metrics.
 """)
 
 # =========================================================
 # LOAD DATA
 # =========================================================
 
-FILE = "Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
 
 try:
 
@@ -54,14 +54,18 @@ required_columns = [
     "Position",
     "Games played",
     "Time on ice",
+
     "Goals",
     "Points",
     "First assist",
     "xG",
+
     "Entries via pass",
     "Breakouts via pass",
+
     "Takeaways in DZ",
     "Puck losses",
+
     "Team xG when on ice",
     "Opponent's xG when on ice"
 ]
@@ -124,6 +128,10 @@ MIN_GP = st.sidebar.slider(
     10
 )
 
+# =========================================================
+# APPLY FILTERS
+# =========================================================
+
 df = df[
     df["Time on ice"] >= MIN_TOI
 ]
@@ -133,7 +141,7 @@ df = df[
 ]
 
 # =========================================================
-# TEAM FILTERS
+# TEAMS
 # =========================================================
 
 teams = sorted(
@@ -151,6 +159,10 @@ team2 = st.sidebar.selectbox(
     teams,
     index=min(1, len(teams)-1)
 )
+
+# =========================================================
+# PLAYERS
+# =========================================================
 
 players1 = sorted(
     df[
@@ -177,7 +189,7 @@ player2 = st.sidebar.selectbox(
 )
 
 # =========================================================
-# PER60 METRICS
+# PER60
 # =========================================================
 
 per60_metrics = [
@@ -245,7 +257,7 @@ reverse_metrics = [
 ]
 
 # =========================================================
-# CLEAN
+# CLEAN NaN / INF
 # =========================================================
 
 df = df.replace(
@@ -293,6 +305,128 @@ p2 = df[
 ].iloc[0]
 
 # =========================================================
+# OVERALL DEFENSEMAN SCORE
+# =========================================================
+
+weights = {
+
+    "Goals": 0.10,
+    "Points": 0.10,
+    "First assist": 0.10,
+    "xG": 0.10,
+
+    "Entries via pass": 0.15,
+    "Breakouts via pass": 0.15,
+
+    "DZ Takeaways": 0.10,
+
+    "Team xG": 0.10,
+
+    "Opp xG": 0.10
+}
+
+# =========================================================
+# CALCULATE ALL SCORES
+# =========================================================
+
+all_scores = []
+
+for _, row in df.iterrows():
+
+    score = 0
+
+    for metric, weight in weights.items():
+
+        pct = row[f"{metric}_pct"] / 100
+
+        score += pct * weight
+
+    toi_factor = np.clip(
+        row["Time on ice"] / 900,
+        0.7,
+        1.4
+    )
+
+    final_score = score * toi_factor
+
+    all_scores.append(final_score)
+
+df["Projection Score"] = all_scores
+
+# =========================================================
+# OVERALL PERCENTILE
+# =========================================================
+
+df["Overall Percentile"] = (
+    df["Projection Score"]
+    .rank(pct=True)
+) * 100
+
+# =========================================================
+# REFRESH PLAYER DATA
+# =========================================================
+
+p1 = df[
+    df["Player"] == player1
+].iloc[0]
+
+p2 = df[
+    df["Player"] == player2
+].iloc[0]
+
+# =========================================================
+# PLAYER SCORES
+# =========================================================
+
+p1_projection = round(
+    p1["Projection Score"],
+    2
+)
+
+p2_projection = round(
+    p2["Projection Score"],
+    2
+)
+
+p1_percentile = round(
+    p1["Overall Percentile"],
+    1
+)
+
+p2_percentile = round(
+    p2["Overall Percentile"],
+    1
+)
+
+p1_grade = round(
+    4 + (p1_percentile / 100) * 6,
+    1
+)
+
+p2_grade = round(
+    4 + (p2_percentile / 100) * 6,
+    1
+)
+
+p1_toi_factor = round(
+    np.clip(
+        p1["Time on ice"] / 900,
+        0.7,
+        1.4
+    ),
+    2
+)
+
+p2_toi_factor = round(
+    np.clip(
+        p2["Time on ice"] / 900,
+        0.7,
+        1.4
+    ),
+    2
+)
+
+# =========================================================
 # HEADER
 # =========================================================
 
@@ -302,42 +436,52 @@ with left:
 
     st.markdown(f"## {player1}")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
 
     c1.metric(
-        "GP",
-        int(p1["Games played"])
+        "Grade",
+        p1_grade
     )
 
     c2.metric(
-        "TOI",
-        int(p1["Time on ice"])
+        "Projection",
+        p1_projection
     )
 
     c3.metric(
-        "Team",
-        p1["Team"]
+        "Percentile",
+        p1_percentile
+    )
+
+    c4.metric(
+        "TOI Factor",
+        p1_toi_factor
     )
 
 with right:
 
     st.markdown(f"## {player2}")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
 
     c1.metric(
-        "GP",
-        int(p2["Games played"])
+        "Grade",
+        p2_grade
     )
 
     c2.metric(
-        "TOI",
-        int(p2["Time on ice"])
+        "Projection",
+        p2_projection
     )
 
     c3.metric(
-        "Team",
-        p2["Team"]
+        "Percentile",
+        p2_percentile
+    )
+
+    c4.metric(
+        "TOI Factor",
+        p2_toi_factor
     )
 
 # =========================================================
