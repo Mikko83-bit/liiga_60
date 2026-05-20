@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 
 # =========================================================
 # PAGE CONFIG
@@ -14,12 +15,13 @@ st.set_page_config(
 st.title("Liiga Projection Grade Model")
 
 st.write("""
-Tämä malli:
-- lukee Liiga Excel -datan
-- laskee per60-luvut
-- vertaa pelaajia liigakeskiarvoon
-- muodostaa projection scoret
-- muuntaa ne 4–10 arvosanoiksi
+Model:
+- Reads Liiga raw Excel data
+- Calculates per60 metrics
+- Uses league-relative deltas
+- Builds weighted projection score
+- Converts scores to 4–10 grades
+- Includes player comparison spider chart
 """)
 
 # =========================================================
@@ -33,7 +35,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is None:
 
-    st.info("Upload your Excel file to continue.")
+    st.info("Upload your Excel file.")
     st.stop()
 
 # =========================================================
@@ -50,18 +52,10 @@ except Exception as e:
     st.stop()
 
 # =========================================================
-# CLEAN COLUMN NAMES
+# CLEAN COLUMNS
 # =========================================================
 
 df.columns = df.columns.str.strip()
-
-# =========================================================
-# SHOW COLUMNS
-# =========================================================
-
-with st.expander("Show Data Columns"):
-
-    st.write(df.columns.tolist())
 
 # =========================================================
 # REQUIRED COLUMNS
@@ -70,6 +64,7 @@ with st.expander("Show Data Columns"):
 required_columns = [
     "Player",
     "Team",
+    "Position",
     "Time on ice",
     "Goals",
     "First assist",
@@ -90,10 +85,7 @@ missing_columns = [
 
 if len(missing_columns) > 0:
 
-    st.error(
-        f"Missing columns: {missing_columns}"
-    )
-
+    st.error(f"Missing columns: {missing_columns}")
     st.stop()
 
 # =========================================================
@@ -102,17 +94,22 @@ if len(missing_columns) > 0:
 
 df = df.copy()
 
-# TOI numeroksi
 df["Time on ice"] = pd.to_numeric(
     df["Time on ice"],
     errors="coerce"
 )
 
-# Poista puuttuvat TOI
 df = df.dropna(subset=["Time on ice"])
 
-# Poista 0 TOI
 df = df[df["Time on ice"] > 0]
+
+# =========================================================
+# MINIMUM TOI FILTER
+# =========================================================
+
+MIN_TOI = 200
+
+df = df[df["Time on ice"] >= MIN_TOI]
 
 # =========================================================
 # METRICS
@@ -211,7 +208,7 @@ df["Percentile"] = (
 ) * 100
 
 # =========================================================
-# GRADE
+# GRADE 4-10
 # =========================================================
 
 df["Grade"] = (
@@ -219,13 +216,65 @@ df["Grade"] = (
 ).round(1)
 
 # =========================================================
-# SORT
+# ATTRIBUTE GRADES
 # =========================================================
 
-df = df.sort_values(
-    by="Grade",
-    ascending=False
-)
+df["Scoring"] = (
+    (
+        df["Goals_per60"].rank(pct=True)
+        +
+        df["xG_per60"].rank(pct=True)
+        +
+        df["Shots_per60"].rank(pct=True)
+    ) / 3
+) * 6 + 4
+
+df["Playmaking"] = (
+    (
+        df["First assist_per60"].rank(pct=True)
+        +
+        df["Passes to the slot_per60"].rank(pct=True)
+    ) / 2
+) * 6 + 4
+
+df["Transition"] = (
+    df["Entries_per60"].rank(pct=True)
+) * 6 + 4
+
+df["Defense"] = (
+    (
+        df["Takeaways_per60"].rank(pct=True)
+        +
+        (
+            1 -
+            df["Opponent's xG when on ice_per60"]
+            .rank(pct=True)
+        )
+    ) / 2
+) * 6 + 4
+
+df["Puck Management"] = (
+    (
+        1 -
+        df["Puck losses_per60"].rank(pct=True)
+    )
+) * 6 + 4
+
+# =========================================================
+# ROUND ATTRIBUTE GRADES
+# =========================================================
+
+attribute_cols = [
+    "Scoring",
+    "Playmaking",
+    "Transition",
+    "Defense",
+    "Puck Management"
+]
+
+for col in attribute_cols:
+
+    df[col] = df[col].round(1)
 
 # =========================================================
 # SIDEBAR FILTERS
@@ -233,12 +282,20 @@ df = df.sort_values(
 
 st.sidebar.header("Filters")
 
-# Team filter
+# Team
 teams = sorted(df["Team"].dropna().unique())
 
 selected_team = st.sidebar.selectbox(
-    "Select Team",
+    "Team",
     ["All Teams"] + teams
+)
+
+# Position
+positions = sorted(df["Position"].dropna().unique())
+
+selected_position = st.sidebar.selectbox(
+    "Position",
+    ["All Positions"] + positions
 )
 
 # =========================================================
@@ -253,110 +310,158 @@ if selected_team != "All Teams":
         filtered_df["Team"] == selected_team
     ]
 
+if selected_position != "All Positions":
+
+    filtered_df = filtered_df[
+        filtered_df["Position"] == selected_position
+    ]
+
 # =========================================================
-# PLAYER SELECT
+# PLAYER SELECTORS
 # =========================================================
 
-player = st.selectbox(
-    "Select Player",
-    sorted(filtered_df["Player"].unique())
+players = sorted(filtered_df["Player"].unique())
+
+player1 = st.selectbox(
+    "Player 1",
+    players,
+    index=0
 )
 
-player_df = filtered_df[
-    filtered_df["Player"] == player
-]
+player2 = st.selectbox(
+    "Player 2",
+    players,
+    index=min(1, len(players)-1)
+)
+
+p1 = filtered_df[
+    filtered_df["Player"] == player1
+].iloc[0]
+
+p2 = filtered_df[
+    filtered_df["Player"] == player2
+].iloc[0]
 
 # =========================================================
 # PLAYER OVERVIEW
 # =========================================================
 
-st.subheader(player)
-
-team_name = player_df["Team"].iloc[0]
-
-st.write(f"Team: {team_name}")
-
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
+
+    st.subheader(player1)
+
+    st.metric(
+        "Grade",
+        p1["Grade"]
+    )
 
     st.metric(
         "Projection Score",
         round(
-            player_df["Projection Score"].iloc[0],
+            p1["Projection Score"],
             2
         )
     )
 
 with col2:
 
-    st.metric(
-        "Percentile",
-        round(
-            player_df["Percentile"].iloc[0],
-            1
-        )
-    )
-
-with col3:
+    st.subheader(player2)
 
     st.metric(
         "Grade",
-        player_df["Grade"].iloc[0]
+        p2["Grade"]
+    )
+
+    st.metric(
+        "Projection Score",
+        round(
+            p2["Projection Score"],
+            2
+        )
     )
 
 # =========================================================
-# UNDERLYING METRICS
+# SPIDER CHART
 # =========================================================
 
-st.subheader("Underlying Metrics")
+categories = [
+    "Scoring",
+    "Playmaking",
+    "Transition",
+    "Defense",
+    "Puck Management"
+]
 
-metric_table = pd.DataFrame({
+fig = go.Figure()
 
-    "Metric": metrics,
+fig.add_trace(go.Scatterpolar(
 
-    "Per60": [
-
-        round(
-            player_df[f"{m}_per60"].iloc[0],
-            2
-        )
-
-        for m in metrics
+    r=[
+        p1[c] for c in categories
     ],
 
-    "Delta vs League": [
+    theta=categories,
 
-        round(
-            player_df[f"d_{m}"].iloc[0],
-            2
+    fill='toself',
+
+    name=player1
+))
+
+fig.add_trace(go.Scatterpolar(
+
+    r=[
+        p2[c] for c in categories
+    ],
+
+    theta=categories,
+
+    fill='toself',
+
+    name=player2
+))
+
+fig.update_layout(
+
+    polar=dict(
+
+        radialaxis=dict(
+            visible=True,
+            range=[4, 10]
         )
+    ),
 
-        for m in metrics
-    ]
-})
+    showlegend=True,
 
-st.dataframe(
-    metric_table,
+    height=700
+)
+
+st.plotly_chart(
+    fig,
     use_container_width=True
 )
 
 # =========================================================
-# ALL PLAYERS TABLE
+# PLAYER DATA TABLE
 # =========================================================
 
-st.subheader("All Players")
+st.subheader("Player Comparison")
 
-table_columns = [
-    "Player",
-    "Team",
-    "Projection Score",
-    "Percentile",
-    "Grade"
-]
+comparison_df = pd.DataFrame({
+
+    "Attribute": categories,
+
+    player1: [
+        p1[c] for c in categories
+    ],
+
+    player2: [
+        p2[c] for c in categories
+    ]
+})
 
 st.dataframe(
-    filtered_df[table_columns],
-    use_container_width=True,
-    height=700
+    comparison_df,
+    use_container_width=True
 )
