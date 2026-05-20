@@ -15,11 +15,11 @@ st.title("Liiga Projection Grade Model")
 
 st.write("""
 Tämä malli:
-- lukee raakadataa Excelistä
+- lukee Liiga Excel -datan
 - laskee per60-luvut
-- vertaa liigakeskiarvoihin
-- muodostaa projection scoren
-- muuntaa scoret 4–10 arvosanoiksi
+- vertaa pelaajia liigakeskiarvoon
+- muodostaa projection scoret
+- muuntaa ne 4–10 arvosanoiksi
 """)
 
 # =========================================================
@@ -27,13 +27,13 @@ Tämä malli:
 # =========================================================
 
 uploaded_file = st.file_uploader(
-    "Upload Excel file",
+    "Upload Liiga Excel File",
     type=["xlsx"]
 )
 
 if uploaded_file is None:
 
-    st.info("Upload your Liiga Excel file to continue.")
+    st.info("Upload your Excel file to continue.")
     st.stop()
 
 # =========================================================
@@ -50,6 +50,12 @@ except Exception as e:
     st.stop()
 
 # =========================================================
+# CLEAN COLUMN NAMES
+# =========================================================
+
+df.columns = df.columns.str.strip()
+
+# =========================================================
 # SHOW COLUMNS
 # =========================================================
 
@@ -58,44 +64,54 @@ with st.expander("Show Data Columns"):
     st.write(df.columns.tolist())
 
 # =========================================================
-# TOI COLUMN
-# =========================================================
-# CHANGE IF NEEDED
+# REQUIRED COLUMNS
 # =========================================================
 
-TOI_COLUMN = "TOI"
+required_columns = [
+    "Player",
+    "Time on ice",
+    "Goals",
+    "First assist",
+    "xG",
+    "Shots",
+    "Passes to the slot",
+    "Entries",
+    "Takeaways",
+    "Puck losses",
+    "Team xG when on ice",
+    "Opponent's xG when on ice"
+]
 
-if TOI_COLUMN not in df.columns:
+missing_columns = [
+    col for col in required_columns
+    if col not in df.columns
+]
+
+if len(missing_columns) > 0:
 
     st.error(
-        f"TOI column '{TOI_COLUMN}' not found."
+        f"Missing columns: {missing_columns}"
     )
 
     st.stop()
 
 # =========================================================
-# PLAYER COLUMN
+# CLEAN DATA
 # =========================================================
 
-possible_player_cols = [
-    "Player",
-    "Name",
-    "player",
-    "PLAYER"
-]
+df = df.copy()
 
-player_col = None
+# Muunna TOI numeroksi
+df["Time on ice"] = pd.to_numeric(
+    df["Time on ice"],
+    errors="coerce"
+)
 
-for col in possible_player_cols:
+# Poista puuttuvat TOI-rivit
+df = df.dropna(subset=["Time on ice"])
 
-    if col in df.columns:
-
-        player_col = col
-        break
-
-if player_col is None:
-
-    player_col = df.columns[0]
+# Poista 0 TOI
+df = df[df["Time on ice"] > 0]
 
 # =========================================================
 # METRICS
@@ -115,31 +131,15 @@ metrics = [
 ]
 
 # =========================================================
-# CHECK MISSING COLUMNS
+# CONVERT TO NUMERIC
 # =========================================================
 
-missing = [
-    col for col in metrics
-    if col not in df.columns
-]
+for metric in metrics:
 
-if len(missing) > 0:
-
-    st.error(
-        f"Missing columns: {missing}"
-    )
-
-    st.stop()
-
-# =========================================================
-# CLEAN DATA
-# =========================================================
-
-df = df.copy()
-
-df = df[df[TOI_COLUMN] > 0]
-
-df[metrics] = df[metrics].fillna(0)
+    df[metric] = pd.to_numeric(
+        df[metric],
+        errors="coerce"
+    ).fillna(0)
 
 # =========================================================
 # PER60
@@ -148,7 +148,7 @@ df[metrics] = df[metrics].fillna(0)
 for metric in metrics:
 
     df[f"{metric}_per60"] = (
-        df[metric] / df[TOI_COLUMN]
+        df[metric] / df["Time on ice"]
     ) * 60
 
 # =========================================================
@@ -177,7 +177,7 @@ for metric in metrics:
 # =========================================================
 # PROJECTION SCORE
 # =========================================================
-# BASED ON YOUR DISCUSSION MODEL
+# BASED ON RELATIVE PERFORMANCE
 # =========================================================
 
 df["Projection Score"] = (
@@ -203,7 +203,7 @@ df["Projection Score"] = (
 )
 
 # =========================================================
-# PERCENTILES
+# PERCENTILE
 # =========================================================
 
 df["Percentile"] = (
@@ -212,7 +212,7 @@ df["Percentile"] = (
 ) * 100
 
 # =========================================================
-# 4-10 GRADE
+# GRADE 4-10
 # =========================================================
 
 df["Grade"] = (
@@ -229,16 +229,16 @@ df = df.sort_values(
 )
 
 # =========================================================
-# PLAYER SELECTOR
+# PLAYER SELECT
 # =========================================================
 
 player = st.selectbox(
     "Select Player",
-    sorted(df[player_col].unique())
+    sorted(df["Player"].unique())
 )
 
 player_df = df[
-    df[player_col] == player
+    df["Player"] == player
 ]
 
 # =========================================================
@@ -313,20 +313,20 @@ st.dataframe(
 )
 
 # =========================================================
-# FULL TABLE
+# ALL PLAYERS TABLE
 # =========================================================
 
 st.subheader("All Players")
 
-table_cols = [
-    player_col,
+table_columns = [
+    "Player",
     "Projection Score",
     "Percentile",
     "Grade"
 ]
 
 st.dataframe(
-    df[table_cols],
+    df[table_columns],
     use_container_width=True,
     height=700
 )
