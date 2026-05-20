@@ -30,7 +30,7 @@ Projection-oriented player model using:
 # LOAD EXCEL
 # =========================================================
 
-FILE = "data/Liiga 2025-2026_skaters_teams.xlsx"
+FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 # ---------------------------------------------------------
 # PLAYER SHEET
