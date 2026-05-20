@@ -22,16 +22,11 @@ predict future offensive breakout potential.
 # FILE UPLOADER
 # =========================================================
 
-uploaded_file = st.file_uploader(
-    "Upload Liiga Excel File",
-    type=["xlsx"]
+raw_df = pd.read_excel(uploaded_file)
+
+raw_df = pd.read_excel(
+    "Liiga 2025-2026_skaters_teams.xlsx"
 )
-
-if uploaded_file is None:
-
-    st.info("Upload Excel file to continue.")
-    st.stop()
-
 # =========================================================
 # READ EXCEL
 # =========================================================
