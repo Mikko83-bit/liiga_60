@@ -30,18 +30,16 @@ FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 @st.cache_data
 def load_raw_data():
-    # Luetaan raakadata Excelistä indeksien perusteella (0=Skaters/Players, 1=Teams)
     p_df = pd.read_excel(FILE, sheet_name=0)
     t_df = pd.read_excel(FILE, sheet_name=1)
     return p_df, t_df
 
-# Haetaan puhtaat kopiot välimuistista, jotta muut sivut eivät rikkoonnu
 raw_players, raw_teams = load_raw_data()
 df = raw_players.copy()
 teams_df = raw_teams.copy()
 
 # =========================================================
-# CLEAN COLUMN NAMES (Alkupuhdistus välimerkeille)
+# CLEAN COLUMN NAMES
 # =========================================================
 df.columns = (
     df.columns
@@ -59,10 +57,7 @@ teams_df.columns = (
     .str.replace("\r", "", regex=False)
 )
 
-# =========================================================
-# EXCEL OTSIKKOKORJAUS ("th" -> "Date of birth")
-# =========================================================
-# Jos Excelissä sarakeotsikko on nyrjähtänyt muotoon "th", käännetään se koodille ymmärrettäväksi
+# Otsikkokorjaus jos sarake on "th"
 if "th" in df.columns and "Date of birth" not in df.columns:
     df = df.rename(columns={"th": "Date of birth"})
 
@@ -70,42 +65,22 @@ if "th" in df.columns and "Date of birth" not in df.columns:
 # REQUIRED COLUMNS
 # =========================================================
 required_player_columns = [
-    "Player",
-    "Team",
-    "Position",
-    "Date of birth",
-    "Games played",
-    "Time on ice",
-    "Goals",
-    "First assist",
-    "xG",
-    "Pre-shots passes",
-    "Team xG when on ice",
-    "Opponent's xG when on ice",
-    "Puck losses"
+    "Player", "Team", "Position", "Date of birth", "Games played", "Time on ice",
+    "Goals", "First assist", "xG", "Pre-shots passes", "Team xG when on ice",
+    "Opponent's xG when on ice", "Puck losses"
 ]
 
-required_team_columns = [
-    "Team",
-    "Games",
-    "xGF",
-    "xGA"
-]
+required_team_columns = ["Team", "Games", "xGF", "xGA"]
 
-# =========================================================
-# CHECK REQUIRED COLUMNS
-# =========================================================
 missing_player = [col for col in required_player_columns if col not in df.columns]
 missing_team = [col for col in required_team_columns if col not in teams_df.columns]
 
 if len(missing_player) > 0:
     st.error(f"Missing player columns: {missing_player}")
-    st.write(df.columns.tolist())
     st.stop()
 
 if len(missing_team) > 0:
     st.error(f"Missing team columns: {missing_team}")
-    st.write(teams_df.columns.tolist())
     st.stop()
 
 # =========================================================
@@ -115,7 +90,6 @@ player_numeric_cols = [
     "Games played", "Time on ice", "Goals", "First assist", "xG",
     "Pre-shots passes", "Team xG when on ice", "Opponent's xG when on ice", "Puck losses"
 ]
-
 for col in player_numeric_cols:
     df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -124,47 +98,55 @@ for col in team_numeric_cols:
     teams_df[col] = pd.to_numeric(teams_df[col], errors="coerce")
 
 # =========================================================
-# POMMINVARMA AGE FIX
+# POMMINVARMA IÄN LASKENTA MATEMAATTISESTI (Vuosi 2026)
 # =========================================================
-# Parsitaan päivämäärät automaattisella tunnistuksella ilman pakotettua formaattia
-df["Date of birth_parsed"] = pd.to_datetime(df["Date of birth"], errors="coerce")
+# Muutetaan tekstiksi, jotta voidaan pilkkoa merkkijonona
+dob_str = df["Date of birth"].astype(str).str.strip()
 
-# Jos vuodet tunnistettiin väärin (esim. pelkkä vuosiluku muuttui sekunneiksi), korjataan se:
-if df["Date of birth_parsed"].dt.year.min() < 1930:
-    df["Date of birth_parsed"] = pd.to_datetime(
-        df["Date of birth"].astype(str).str.extract(r'(\d{4})')[0], 
-        format="%Y", 
-        errors="coerce"
-    )
+# Haetaan vuosi, kuukausi ja päivä säännöllisillä lausekkeilla (Regex) muodosta VVVV-KK-PP
+df["Birth_Year"] = pd.to_numeric(dob_str.str.extract(r'^(\d{4})')[0], errors="coerce")
+df["Birth_Month"] = pd.to_numeric(dob_str.str.extract(r'^\d{4}-(\d{2})')[0], errors="coerce")
+df["Birth_Day"] = pd.to_numeric(dob_str.str.extract(r'^\d{4}-\d{2}-(\d{2})')[0], errors="coerce")
 
-# Lasketaan tarkka ikä (Nykyhetki on vuodessa 2026)
-today = pd.Timestamp.today().normalize()
-df["Age"] = (today - df["Date of birth_parsed"]).dt.days / 365.25
+# Jos Excel latasi ne jo valmiiksi datetime-muodossa, napataan arvausten sijaan suoraan datetimesta osat
+try:
+    parsed_direct = pd.to_datetime(df["Date of birth"], errors="coerce")
+    df["Birth_Year"] = df["Birth_Year"].fillna(parsed_direct.dt.year)
+    df["Birth_Month"] = df["Birth_Month"].fillna(parsed_direct.dt.month)
+    df["Birth_Day"] = df["Birth_Day"].fillna(parsed_direct.dt.day)
+except:
+    pass
+
+# Lasketaan tarkka desimaali-ikä suhteessa nykyhetkeen (Kesäkuu 2026)
+# Vuosi on 2026, kuukausi on 6 (kesäkuu)
+current_year = 2026
+current_month = 6
+
+df["Age"] = (current_year - df["Birth_Year"]) + ((current_month - df["Birth_Month"]) / 12.0)
 df["Age"] = df["Age"].round(1)
 
-# Jos datassa on tyhjiä rivejä, annetaan niille oletukseksi 25.0 nollan sijaan
-df["Age"] = df["Age"].fillna(25.0)
+# Suojataan tyhjät tai virheelliset iät (jos jollain ei ole syntymäaikaa ollenkaan)
+mean_age = df["Age"].mean()
+df["Age"] = df["Age"].fillna(mean_age if not np.isnan(mean_age) else 26.0)
+
+# Siivotaan väliaikaiset sarakkeet pois sotkemasta
+df = df.drop(columns=["Birth_Year", "Birth_Month", "Birth_Day"])
 
 # =========================================================
-# CLEAN DATA & FILL NaNs (Muut muuttujat)
+# CLEAN DATA & FILL NaNs
 # =========================================================
 df = df.replace([np.inf, -np.inf], np.nan)
-
-fill_cols = [
-    "Games played", "Time on ice", "Goals", "First assist", "xG",
-    "Pre-shots passes", "Team xG when on ice", "Opponent's xG when on ice", "Puck losses"
-]
-df[fill_cols] = df[fill_cols].fillna(0)
+df[player_numeric_cols] = df[player_numeric_cols].fillna(0)
 
 # =========================================================
-# SIDEBAR FILTERS
+# SIDEBAR FILTERS (Nostetaan max ikää reilusti, jotta kokeneetkin näkyvät)
 # =========================================================
 st.sidebar.header("Filters")
 
 positions = sorted(df["Position"].dropna().unique())
 selected_position = st.sidebar.selectbox("Position", positions)
 
-selected_age = st.sidebar.slider("Maximum Age", 16, 40, 25)
+selected_age = st.sidebar.slider("Maximum Age", 16, 45, 28)
 min_toi = st.sidebar.slider("Minimum TOI", 0, 2000, 300, 10)
 min_games = st.sidebar.slider("Minimum Games", 0, 80, 10)
 
