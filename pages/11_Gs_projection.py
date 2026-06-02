@@ -57,7 +57,7 @@ teams_df.columns = (
     .str.replace("\r", "", regex=False)
 )
 
-# Otsikkokorjaus jos sarake on "th"
+# Otsikkokorjaus jos sarake on vahingossa muussa muodossa
 if "th" in df.columns and "Date of birth" not in df.columns:
     df = df.rename(columns={"th": "Date of birth"})
 
@@ -98,39 +98,44 @@ for col in team_numeric_cols:
     teams_df[col] = pd.to_numeric(teams_df[col], errors="coerce")
 
 # =========================================================
-# POMMINVARMA IÄN LASKENTA MATEMAATTISESTI (Vuosi 2026)
+# ÄLYKÄS IÄN LASKENTA (Tunnistaa pelkän vuoden tai täyden päivän)
 # =========================================================
-# Muutetaan tekstiksi, jotta voidaan pilkkoa merkkijonona
-dob_str = df["Date of birth"].astype(str).str.strip()
+# Muutetaan sarake varmuuden vuoksi tekstiksi käsittelyä varten
+dob_raw = df["Date of birth"].astype(str).str.strip()
 
-# Haetaan vuosi, kuukausi ja päivä säännöllisillä lausekkeilla (Regex) muodosta VVVV-KK-PP
-df["Birth_Year"] = pd.to_numeric(dob_str.str.extract(r'^(\d{4})')[0], errors="coerce")
-df["Birth_Month"] = pd.to_numeric(dob_str.str.extract(r'^\d{4}-(\d{2})')[0], errors="coerce")
-df["Birth_Day"] = pd.to_numeric(dob_str.str.extract(r'^\d{4}-\d{2}-(\d{2})')[0], errors="coerce")
+def parse_years_safely(val):
+    # Jos kyseessä on pelkkä 4-numeroinen vuosiluku (esim. 1995 tai 2004) tai se päättyy .0
+    # Otetaan vain ensimmäiset 4 numeroa talteen
+    try:
+        clean_val = val.split('.')[0] # poistaa mahdollisen .0 desimaalin
+        if len(clean_val) >= 4 and clean_val[:4].isdigit():
+            year = int(clean_val[:4])
+            if 1960 <= year <= 2015:
+                return year
+    except:
+        pass
+    return None
 
-# Jos Excel latasi ne jo valmiiksi datetime-muodossa, napataan arvausten sijaan suoraan datetimesta osat
+# Yritetään poimia vuosi ensin suoraan tekstimuodosta
+df["Birth_Year"] = dob_str_extracted = dob_raw.apply(parse_years_safely)
+
+# Jos se oli valmiiksi datetime-objekti, otetaan vuosi sieltä niille jotka jäivät tyhjiksi
 try:
     parsed_direct = pd.to_datetime(df["Date of birth"], errors="coerce")
     df["Birth_Year"] = df["Birth_Year"].fillna(parsed_direct.dt.year)
-    df["Birth_Month"] = df["Birth_Month"].fillna(parsed_direct.dt.month)
-    df["Birth_Day"] = df["Birth_Day"].fillna(parsed_direct.dt.day)
 except:
     pass
 
-# Lasketaan tarkka desimaali-ikä suhteessa nykyhetkeen (Kesäkuu 2026)
-# Vuosi on 2026, kuukausi on 6 (kesäkuu)
+# Lasketaan ikä suoraan vuodesta 2026 käsin (oletetaan keskimääräinen syntymäpäivä vuoden puoliväliin)
 current_year = 2026
-current_month = 6
+df["Age"] = current_year - df["Birth_Year"]
 
-df["Age"] = (current_year - df["Birth_Year"]) + ((current_month - df["Birth_Month"]) / 12.0)
-df["Age"] = df["Age"].round(1)
-
-# Suojataan tyhjät tai virheelliset iät (jos jollain ei ole syntymäaikaa ollenkaan)
+# Jos jollain riveillä ikää ei saatu (esim. tyhjä solu), annetaan sarjan keskiarvo tai järkevä oletus (26.0)
 mean_age = df["Age"].mean()
-df["Age"] = df["Age"].fillna(mean_age if not np.isnan(mean_age) else 26.0)
+df["Age"] = df["Age"].fillna(mean_age if not np.isnan(mean_age) else 26.0).round(1)
 
-# Siivotaan väliaikaiset sarakkeet pois sotkemasta
-df = df.drop(columns=["Birth_Year", "Birth_Month", "Birth_Day"])
+# Siivotaan väliaikaisrakenne pois
+df = df.drop(columns=["Birth_Year"])
 
 # =========================================================
 # CLEAN DATA & FILL NaNs
@@ -139,14 +144,14 @@ df = df.replace([np.inf, -np.inf], np.nan)
 df[player_numeric_cols] = df[player_numeric_cols].fillna(0)
 
 # =========================================================
-# SIDEBAR FILTERS (Nostetaan max ikää reilusti, jotta kokeneetkin näkyvät)
+# SIDEBAR FILTERS (Nostettu yläikäraja 45 vuoteen)
 # =========================================================
 st.sidebar.header("Filters")
 
 positions = sorted(df["Position"].dropna().unique())
 selected_position = st.sidebar.selectbox("Position", positions)
 
-selected_age = st.sidebar.slider("Maximum Age", 16, 45, 28)
+selected_age = st.sidebar.slider("Maximum Age", 16, 45, 40)
 min_toi = st.sidebar.slider("Minimum TOI", 0, 2000, 300, 10)
 min_games = st.sidebar.slider("Minimum Games", 0, 80, 10)
 
