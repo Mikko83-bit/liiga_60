@@ -25,7 +25,7 @@ def load_data():
     # ---------------------------------------------------
     # READ EXCEL
     # ---------------------------------------------------
-    players = pd.read_excel(FILE, sheet_name="Players")
+    players = pd.read_excel(FILE, sheet_name="Player")
     teams = pd.read_excel(FILE, sheet_name="Teams")
 
     # ---------------------------------------------------
