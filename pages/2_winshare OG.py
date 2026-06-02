@@ -1,730 +1,479 @@
-# =========================================================
-# TRUE POINT SHARES MODEL
-# TOI-BASED DEFENSIVE ALLOCATION
-# =========================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
+from scipy.stats import zscore
 
-# =========================================================
-# PAGE
-# =========================================================
-
+# ---------------------------------------------------
+# PAGE CONFIG
+# ---------------------------------------------------
 st.set_page_config(
-    page_title="Liiga Point Shares",
+    page_title="SDHL Player Profiles",
     page_icon="🏒",
     layout="wide"
 )
 
-st.title("🏒 Liiga Point Shares 2025-2026")
-
-# =========================================================
-# FILE
-# =========================================================
-
+# ---------------------------------------------------
+# FILE (Päivitetty uusi tiedostonimi)
+# ---------------------------------------------------
 FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
-# =========================================================
-# CLEAN COLUMNS
-# =========================================================
-
-def clean_columns(df):
-
-    df.columns = (
-
-        df.columns
-
-        .str.strip()
-
-        .str.replace(" ", "_")
-        .str.replace("/", "_")
-        .str.replace("%", "perc")
-        .str.replace("-", "_")
-        .str.replace("(", "", regex=False)
-        .str.replace(")", "", regex=False)
-        .str.replace(",", "", regex=False)
-        .str.replace(".", "", regex=False)
-
-    )
-
-    return df
-
-
-# =========================================================
+# ---------------------------------------------------
 # LOAD DATA
-# =========================================================
-
+# ---------------------------------------------------
 @st.cache_data
 def load_data():
-
-    # =====================================================
+    # ---------------------------------------------------
     # READ EXCEL
-    # =====================================================
+    # ---------------------------------------------------
+    players = pd.read_excel(FILE, sheet_name="Players")
+    teams = pd.read_excel(FILE, sheet_name="Teams")
 
-    players = pd.read_excel(
-        FILE,
-        sheet_name="Skaters"
-    )
-
-    teams = pd.read_excel(
-        FILE,
-        sheet_name="Teams"
-    )
-
-    # =====================================================
-    # CLEAN
-    # =====================================================
-
-    players = clean_columns(players)
-    teams = clean_columns(teams)
-
-    # =====================================================
-    # TEAM CLEAN
-    # =====================================================
-
-    players["Team"] = (
-        players["Team"]
-        .astype(str)
+    # ---------------------------------------------------
+    # CLEAN COLUMN NAMES
+    # ---------------------------------------------------
+    players.columns = (
+        players.columns
         .str.strip()
+        .str.replace(" ", "_")
+        .str.replace("/", "_per_")
+        .str.replace("%", "perc")
+        .str.replace("(", "", regex=False)
+        .str.replace(")", "", regex=False)
     )
 
-    teams["Team"] = (
-        teams["Team"]
-        .astype(str)
+    teams.columns = (
+        teams.columns
         .str.strip()
+        .str.replace(" ", "_")
+        .str.replace("/", "_per_")
+        .str.replace("%", "perc")
     )
 
-    # =====================================================
-    # NUMERIC PLAYER COLUMNS
-    # =====================================================
+    # REMOVE DOUBLE UNDERSCORES
+    players.columns = players.columns.str.replace("__", "_")
+    players.columns = players.columns.str.replace("__", "_")
 
-    player_numeric = [
+    teams.columns = teams.columns.str.replace("__", "_")
+    teams.columns = teams.columns.str.replace("__", "_")
 
-        "Goals",
-        "Assists",
-        "xG",
-        "Time_on_ice",
-        "Passes_to_the_slot",
-        "Takeaways",
-        "Puck_losses",
-        "Puck_battles_won",
-        "NetxG",
-        "Penalties_drawn",
-        "Penalties"
-
-    ]
-
-    for col in player_numeric:
-
-        players[col] = pd.to_numeric(
-            players[col],
-            errors="coerce"
-        ).fillna(0)
-
-    # =====================================================
-    # NUMERIC TEAM COLUMNS
-    # =====================================================
-
-    team_numeric = [
-
-        "Games",
-        "Goals_for",
-        "Goals_agn"
-
-    ]
-
-    for col in team_numeric:
-
-        teams[col] = pd.to_numeric(
-            teams[col],
-            errors="coerce"
-        ).fillna(0)
-
-    # =====================================================
-    # LEAGUE BASELINES
-    # =====================================================
-
-    league_goals_per_game = (
-
-        teams["Goals_for"].sum()
-
-        /
-
-        teams["Games"].sum()
-
+    # ---------------------------------------------------
+    # TEAM STATS
+    # ---------------------------------------------------
+    teams["GPG"] = (
+        teams["Goal_for"] / teams["GP"]
     )
 
-    # =====================================================
-    # TEAM MGF / MGA
-    # =====================================================
-
-    teams["MGF"] = (
-
-        teams["Goals_for"]
-
-        -
-
-        (
-            (7 / 12)
-
-            *
-
-            teams["Games"]
-
-            *
-
-            league_goals_per_game
-        )
-
+    teams["GAPG"] = (
+        teams["Goal_agn"] / teams["GP"]
     )
 
-    teams["MGA"] = (
-
-        (
-            1 + (7 / 12)
-        )
-
-        *
-
-        teams["Games"]
-
-        *
-
-        league_goals_per_game
-
-        -
-
-        teams["Goals_agn"]
-
-    )
-
-    # =====================================================
+    # ---------------------------------------------------
     # MERGE
-    # =====================================================
+    # ---------------------------------------------------
+    df = players.merge(teams, on="Team")
 
-    df = players.merge(
+    # ---------------------------------------------------
+    # FIX PLAYER POSITIONS
+    # ---------------------------------------------------
+    df.loc[
+        df["Player"] == "Elisa Holopainen",
+        "Position"
+    ] = "F"
 
-        teams[
-            [
-                "Team",
-                "MGF",
-                "MGA"
-            ]
-        ],
+    # ---------------------------------------------------
+    # RENAME IMPORTANT COLUMNS
+    # ---------------------------------------------------
+    rename_dict = {
+        # OFFENSE
+        "Goals_per_60": "Goals60",
+        "Assists_per_60": "Assists60",
+        "xG_per_60": "xG60",
 
-        on="Team",
-        how="left"
+        # DEFENSE
+        "Takeaways_per_60": "Takeaways60",
+        "Puck_losses_per_60": "PuckLosses60",
+        "Net_penalties_per_60": "NetPenalties60",
 
-    )
+        # OTHER
+        "Passes_to_the_slot": "SlotPasses",
+        "Puck_battles_won": "PuckBattlesWon",
+        "Net_xG": "NetxG"
+    }
 
-    # =====================================================
-    # TOI
-    # =====================================================
+    df = df.rename(columns=rename_dict)
 
-    df["TOI"] = pd.to_numeric(
-        df["Time_on_ice"],
-        errors="coerce"
-    ).fillna(0)
+    # ---------------------------------------------------
+    # FILL NaN VALUES
+    # ---------------------------------------------------
+    numeric_cols = df.select_dtypes(include=np.number).columns
+    df[numeric_cols] = df[numeric_cols].fillna(0)
 
-    # =====================================================
-    # TEAM TOI
-    # =====================================================
+    # ---------------------------------------------------
+    # METRICS
+    # ---------------------------------------------------
+    metrics = [
+        # OFFENSE
+        "Goals60",
+        "Assists60",
+        "xG60",
+        "Scoring_chances",
+        "SlotPasses",
 
-    team_toi = (
-
-        df.groupby("Team")["TOI"]
-        .sum()
-        .reset_index()
-
-    )
-
-    team_toi.columns = [
-        "Team",
-        "TeamTOI"
+        # DEFENSE
+        "NetxG",
+        "Takeaways60",
+        "PuckLosses60",
+        "NetPenalties60",
+        "PuckBattlesWon"
     ]
 
-    df = df.merge(
-        team_toi,
-        on="Team",
-        how="left"
+    # ---------------------------------------------------
+    # CREATE EMPTY Z-SCORE COLUMNS
+    # ---------------------------------------------------
+    for metric in metrics:
+        df[f"{metric}_z"] = 0.0
+
+    # ---------------------------------------------------
+    # POSITION-ADJUSTED Z-SCORES
+    # ---------------------------------------------------
+    for position in ["F", "D"]:
+        pos_mask = df["Position"] == position
+
+        for metric in metrics:
+            if metric in df.columns:
+                values = df.loc[pos_mask, metric]
+                z_values = zscore(values)
+                z_values = np.nan_to_num(z_values)
+                df.loc[
+                    pos_mask,
+                    f"{metric}_z"
+                ] = z_values.astype(float)
+
+    # ---------------------------------------------------
+    # LEAGUE AVERAGES
+    # ---------------------------------------------------
+    league_gpg = teams["GPG"].mean()
+    league_gapg = teams["GAPG"].mean()
+
+    # ---------------------------------------------------
+    # TEAM ADJUSTMENTS
+    # ---------------------------------------------------
+    df["Team_Off_Strength"] = (
+        df["GPG"] / league_gpg
     )
 
-    # =====================================================
-    # GOALS CREATED
-    # =====================================================
-
-    df["GoalsCreated"] = (
-
-        df["Goals"]
-
-        +
-
-        (
-            0.7
-            *
-            df["Assists"]
-        )
-
-        +
-
-        (
-            0.15
-            *
-            df["Passes_to_the_slot"]
-        )
-
-        +
-
-        (
-            0.10
-            *
-            df["xG"]
-        )
-
+    df["Team_Def_Strength"] = (
+        league_gapg / df["GAPG"]
     )
 
-    # =====================================================
-    # TEAM GOALS CREATED
-    # =====================================================
-
-    team_gc = (
-
-        df.groupby("Team")["GoalsCreated"]
-        .sum()
-        .reset_index()
-
+    # ---------------------------------------------------
+    # RAW OFFENSIVE WIN SHARES
+    # ---------------------------------------------------
+    df["Raw_OWS"] = (
+        0.30 * df["Goals60_z"] +
+        0.35 * df["Assists60_z"] +
+        0.20 * df["xG60_z"] +
+        0.15 * df["SlotPasses_z"]
     )
 
-    team_gc.columns = [
-        "Team",
-        "TeamGoalsCreated"
-    ]
-
-    df = df.merge(
-        team_gc,
-        on="Team",
-        how="left"
+    # ---------------------------------------------------
+    # RAW DEFENSIVE WIN SHARES
+    # ---------------------------------------------------
+    df["Raw_DWS"] = (
+        0.40 * df["NetxG_z"] +
+        0.20 * df["Takeaways60_z"] -
+        0.20 * df["PuckLosses60_z"] +
+        0.10 * df["NetPenalties60_z"] +
+        0.10 * df["PuckBattlesWon_z"]
     )
 
-    # =====================================================
-    # OFFENSIVE SHARE
-    # =====================================================
-
-    df["OffensiveShare"] = (
-
-        df["GoalsCreated"]
-
-        /
-
-        df["TeamGoalsCreated"]
-
+    # ---------------------------------------------------
+    # TEAM-ADJUSTED WIN SHARES
+    # ---------------------------------------------------
+    df["OWS"] = (
+        df["Raw_OWS"] -
+        ((df["Team_Off_Strength"] - 1) * 0.50)
     )
 
-    df["OffensiveShare"] = (
-        df["OffensiveShare"]
-        .replace([np.inf, -np.inf], 0)
-        .fillna(0)
+    df["DWS"] = (
+        df["Raw_DWS"] -
+        ((df["Team_Def_Strength"] - 1) * 0.50)
     )
 
-    # =====================================================
-    # OFFENSIVE POINT SHARES
-    # =====================================================
-
-    df["OPS"] = (
-
-        df["OffensiveShare"]
-
-        *
-
-        df["MGF"]
-
-    )
-
-    # =====================================================
-    # BASE DEFENSIVE SHARE (TOI BASED)
-    # =====================================================
-
-    df["TOIShare"] = (
-
-        df["TOI"]
-
-        /
-
-        df["TeamTOI"]
-
-    )
-
-    df["TOIShare"] = (
-        df["TOIShare"]
-        .replace([np.inf, -np.inf], 0)
-        .fillna(0)
-    )
-
-    # =====================================================
-    # POSITION ADJUSTMENT
-    # =====================================================
-
-    df["PositionAdjustment"] = np.where(
-
-        df["Position"] == "D",
-
-        1.15,
-
-        0.90
-
-    )
-
-    # =====================================================
-    # BASE DPS
-    # =====================================================
-
-    df["BaseDPS"] = (
-
-        df["TOIShare"]
-
-        *
-
-        df["MGA"]
-
-        *
-
-        df["PositionAdjustment"]
-
-    )
-
-    # =====================================================
-    # DEFENSIVE MODIFIER
-    # SMALL ADJUSTMENT ONLY
-    # =====================================================
-
-    df["DefensiveModifier"] = (
-
-        1
-
-        +
-
-        (
-            0.015
-            *
-            df["NetxG"]
-        )
-
-        +
-
-        (
-            0.002
-            *
-            df["Takeaways"]
-        )
-
-        -
-
-        (
-            0.002
-            *
-            df["Puck_losses"]
-        )
-
-        +
-
-        (
-            0.001
-            *
-            df["Puck_battles_won"]
-        )
-
-        +
-
-        (
-            0.01
-            *
-            (
-                df["Penalties_drawn"]
-                -
-                df["Penalties"]
-            )
-        )
-
-    )
-
-    # =====================================================
-    # CLIP MODIFIER
-    # =====================================================
-
-    df["DefensiveModifier"] = (
-        df["DefensiveModifier"]
-        .clip(0.75, 1.25)
-    )
-
-    # =====================================================
-    # FINAL DPS
-    # =====================================================
-
-    df["DPS"] = (
-
-        df["BaseDPS"]
-
-        *
-
-        df["DefensiveModifier"]
-
-    )
-
-    # =====================================================
+    # ---------------------------------------------------
     # TOI STABILIZATION
-    # =====================================================
-
+    # ---------------------------------------------------
     K = 400
 
     df["TOI_Factor"] = (
-
-        df["TOI"]
-
-        /
-
-        (
-            df["TOI"] + K
-        )
-
+        df["Time_on_ice"] /
+        (df["Time_on_ice"] + K)
     )
 
-    df["OPS"] = (
-        df["OPS"]
-        *
-        df["TOI_Factor"]
+    # APPLY STABILIZATION
+    df["OWS"] = (
+        df["OWS"] * df["TOI_Factor"]
     )
 
-    df["DPS"] = (
-        df["DPS"]
-        *
-        df["TOI_Factor"]
+    df["DWS"] = (
+        df["DWS"] * df["TOI_Factor"]
     )
 
-    # =====================================================
-    # FINAL POINT SHARES
-    # =====================================================
+    # ---------------------------------------------------
+    # TOTAL WIN SHARES
+    # ---------------------------------------------------
+    df["WS"] = df["OWS"] + df["DWS"]
 
-    df["PointShares"] = (
-        df["OPS"]
-        +
-        df["DPS"]
+    # ---------------------------------------------------
+    # PERCENTILES
+    # ---------------------------------------------------
+    df["OWS_percentile"] = (
+        df["OWS"]
+        .rank(pct=True) * 100
     )
 
-    # =====================================================
-    # PERCENTILE
-    # =====================================================
-
-    df["PS_percentile"] = (
-
-        df["PointShares"]
-
-        .rank(pct=True)
-
-        * 100
-
+    df["DWS_percentile"] = (
+        df["DWS"]
+        .rank(pct=True) * 100
     )
 
-    # =====================================================
-    # CLEAN
-    # =====================================================
-
-    df = df.replace(
-        [np.inf, -np.inf],
-        0
+    df["WS_percentile"] = (
+        df["WS"]
+        .rank(pct=True) * 100
     )
 
-    df = df.fillna(0)
+    # ---------------------------------------------------
+    # RANKINGS
+    # ---------------------------------------------------
+    df["OWS_rank"] = (
+        df["OWS"]
+        .rank(ascending=False, method="min")
+        .astype(int)
+    )
+
+    df["DWS_rank"] = (
+        df["DWS"]
+        .rank(ascending=False, method="min")
+        .astype(int)
+    )
+
+    df["WS_rank"] = (
+        df["WS"]
+        .rank(ascending=False, method="min")
+        .astype(int)
+    )
 
     return df
 
-
-# =========================================================
-# LOAD
-# =========================================================
-
+# ---------------------------------------------------
+# LOAD DATA
+# ---------------------------------------------------
 df = load_data()
 
-# =========================================================
+# ---------------------------------------------------
+# TITLE
+# ---------------------------------------------------
+st.title("🏒 SDHL Player Profiles")
+st.markdown("""
+This dashboard includes:
+• Position-adjusted Win Shares
+• Team-adjusted Win Shares
+• TOI stabilization
+• Offensive Win Shares (OWS)
+• Defensive Win Shares (DWS)
+• Overall Win Shares (WS)
+• League percentiles
+• League rankings
+""")
+
+# ---------------------------------------------------
 # FILTERS
-# =========================================================
+# ---------------------------------------------------
+filter_col1, filter_col2, filter_col3 = st.columns(3)
 
-c1, c2 = st.columns(2)
-
-with c1:
-
+# TEAM FILTER
+with filter_col1:
     team_filter = st.selectbox(
-        "Team",
-        ["All"] +
-        sorted(df["Team"].unique())
+        "Select Team",
+        ["All"] + sorted(df["Team"].unique().tolist())
     )
 
-with c2:
-
+# POSITION FILTER
+with filter_col2:
     position_filter = st.selectbox(
-        "Position",
+        "Select Position",
         ["All", "F", "D"]
     )
 
-# =========================================================
-# FILTER DATA
-# =========================================================
+# MINIMUM GAMES FILTER
+with filter_col3:
+    min_games = st.slider(
+        "Minimum Games Played",
+        1,
+        int(df["Games_played"].max()),
+        10
+    )
 
+# ---------------------------------------------------
+# APPLY FILTERS
+# ---------------------------------------------------
 filtered_df = df.copy()
-
 if team_filter != "All":
-
     filtered_df = filtered_df[
         filtered_df["Team"] == team_filter
     ]
-
 if position_filter != "All":
-
     filtered_df = filtered_df[
         filtered_df["Position"] == position_filter
     ]
+filtered_df = filtered_df[
+    filtered_df["Games_played"] >= min_games
+]
 
-# =========================================================
-# TABLE
-# =========================================================
+# ---------------------------------------------------
+# PLAYER SELECTOR
+# ---------------------------------------------------
+player = st.selectbox(
+    "Select Player",
+    sorted(filtered_df["Player"].unique())
+)
 
-st.subheader("Top Point Shares")
+# ---------------------------------------------------
+# PLAYER DATA
+# ---------------------------------------------------
+player_df = filtered_df[
+    filtered_df["Player"] == player
+].iloc[0]
 
-table = (
+# ---------------------------------------------------
+# PLAYER HEADER
+# ---------------------------------------------------
+st.subheader(
+    f"{player_df['Player']} | "
+    f"{player_df['Team']} | "
+    f"{player_df['Position']}"
+)
 
+# ---------------------------------------------------
+# MAIN METRICS
+# ---------------------------------------------------
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric(
+        "OWS",
+        f"{round(player_df['OWS'], 2)} "
+        f"(#{player_df['OWS_rank']})"
+    )
+with col2:
+    st.metric(
+        "DWS",
+        f"{round(player_df['DWS'], 2)} "
+        f"(#{player_df['DWS_rank']})"
+    )
+with col3:
+    st.metric(
+        "WS",
+        f"{round(player_df['WS'], 2)} "
+        f"(#{player_df['WS_rank']})"
+    )
+
+# ---------------------------------------------------
+# PERCENTILES
+# ---------------------------------------------------
+st.subheader("League Percentiles")
+p1, p2, p3 = st.columns(3)
+with p1:
+    st.metric(
+        "OWS Percentile",
+        f"{round(player_df['OWS_percentile'])}%"
+    )
+with p2:
+    st.metric(
+        "DWS Percentile",
+        f"{round(player_df['DWS_percentile'])}%"
+    )
+with p3:
+    st.metric(
+        "WS Percentile",
+        f"{round(player_df['WS_percentile'])}%"
+    )
+
+# ---------------------------------------------------
+# PLAYER INFORMATION
+# ---------------------------------------------------
+st.subheader("Player Information")
+info1, info2, info3, info4 = st.columns(4)
+with info1:
+    st.write(
+        f"**Games Played:** "
+        f"{player_df['Games_played']}"
+    )
+with info2:
+    st.write(
+        f"**Time on Ice:** "
+        f"{round(player_df['Time_on_ice'], 1)}"
+    )
+with info3:
+    st.write(
+        f"**Points:** "
+        f"{player_df['Points']}"
+    )
+with info4:
+    st.write(
+        f"**Net xG:** "
+        f"{round(player_df['NetxG'], 2)}"
+    )
+
+# ---------------------------------------------------
+# ADDITIONAL STATISTICS
+# ---------------------------------------------------
+st.subheader("Additional Statistics")
+stats_df = pd.DataFrame({
+    "Statistic": [
+        "Goals/60",
+        "Assists/60",
+        "xG/60",
+        "Takeaways/60",
+        "Puck Losses/60",
+        "Net Penalties/60",
+        "Puck Battles Won",
+        "Slot Passes"
+    ],
+    "Value": [
+        round(player_df["Goals60"], 2),
+        round(player_df["Assists60"], 2),
+        round(player_df["xG60"], 2),
+        round(player_df["Takeaways60"], 2),
+        round(player_df["PuckLosses60"], 2),
+        round(player_df["NetPenalties60"], 2),
+        round(player_df["PuckBattlesWon"], 2),
+        round(player_df["SlotPasses"], 2)
+    ]
+})
+st.dataframe(
+    stats_df,
+    use_container_width=True,
+    hide_index=True
+)
+
+# ---------------------------------------------------
+# TOP 10 WIN SHARES
+# ---------------------------------------------------
+st.subheader("Top 10 Win Shares")
+top_ws = (
     filtered_df[[
         "Player",
         "Team",
         "Position",
-        "OPS",
-        "DPS",
-        "PointShares",
-        "PS_percentile"
+        "OWS",
+        "DWS",
+        "WS"
     ]]
-
-    .sort_values(
-        "PointShares",
-        ascending=False
-    )
-
+    .sort_values("WS", ascending=False)
+    .head(10)
 )
-
 st.dataframe(
-    table,
+    top_ws,
     use_container_width=True,
     hide_index=True
-)
-
-# =========================================================
-# PLAYER CARD
-# =========================================================
-
-st.divider()
-
-st.header("Player Card")
-
-selected_player = st.selectbox(
-    "Choose Player",
-    sorted(df["Player"].unique())
-)
-
-player_df = df[
-    df["Player"] == selected_player
-]
-
-player = player_df.iloc[0]
-
-# =========================================================
-# PLAYER HEADER
-# =========================================================
-
-st.subheader(
-    f"{player['Player']} | {player['Team']} | {player['Position']}"
-)
-
-# =========================================================
-# METRICS
-# =========================================================
-
-c1, c2, c3 = st.columns(3)
-
-with c1:
-
-    st.metric(
-        "OPS",
-        round(player["OPS"], 2)
-    )
-
-with c2:
-
-    st.metric(
-        "DPS",
-        round(player["DPS"], 2)
-    )
-
-with c3:
-
-    st.metric(
-        "Point Shares",
-        round(player["PointShares"], 2)
-    )
-
-# =========================================================
-# PLAYER DETAILS
-# =========================================================
-
-stats = pd.DataFrame({
-
-    "Metric": [
-
-        "Goals",
-        "Assists",
-        "xG",
-        "Goals Created",
-        "NetxG",
-        "Takeaways",
-        "Puck Losses",
-        "TOI"
-
-    ],
-
-    "Value": [
-
-        round(player["Goals"], 1),
-        round(player["Assists"], 1),
-        round(player["xG"], 1),
-        round(player["GoalsCreated"], 1),
-        round(player["NetxG"], 1),
-        round(player["Takeaways"], 1),
-        round(player["Puck_losses"], 1),
-        round(player["TOI"], 1)
-
-    ]
-
-})
-
-st.dataframe(
-    stats,
-    use_container_width=True,
-    hide_index=True
-)
-
-# =========================================================
-# DISTRIBUTION
-# =========================================================
-
-st.divider()
-
-st.header("Point Share Distribution")
-
-fig = px.histogram(
-    df,
-    x="PointShares",
-    nbins=40
-)
-
-st.plotly_chart(
-    fig,
-    use_container_width=True
 )
