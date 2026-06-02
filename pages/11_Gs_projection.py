@@ -39,7 +39,7 @@ df = raw_players.copy()
 teams_df = raw_teams.copy()
 
 # =========================================================
-# CLEAN COLUMN NAMES
+# CLEAN COLUMN NAMES & FIX HEADERS
 # =========================================================
 df.columns = (
     df.columns
@@ -57,19 +57,34 @@ teams_df.columns = (
     .str.replace("\r", "", regex=False)
 )
 
-# Otsikkokorjaus jos sarake on vahingossa muussa muodossa
+# Otsikkokorjaus lennosta jos sarake on "th"
 if "th" in df.columns and "Date of birth" not in df.columns:
     df = df.rename(columns={"th": "Date of birth"})
 
 # =========================================================
-# REQUIRED COLUMNS
+# VALUVALMIS IÄN LASKENTA (Tehdään ENNEN mitään muuta operaatiota)
+# =========================================================
+# Muutetaan sarakkeen arvot pd.to_datetime -muotoon, pakotetaan virheet NaT:ksi
+parsed_dates = pd.to_datetime(df["Date of birth"], errors="coerce")
+
+# Lasketaan ikä suoraan vuodesta 2026 käsin perustuen syntymävuoteen
+df["Age"] = 2026 - parsed_dates.dt.year
+
+# Sateenvarjomekanismi: jos jokin rivi epäonnistui, poimitaan vuosi tekstistä stringinä
+backup_years = pd.to_numeric(df["Date of birth"].astype(str).str.extract(r'^(\d{4})')[0], errors="coerce")
+df["Age"] = df["Age"].fillna(2026 - backup_years)
+
+# Jos vieläkään ei löydy ikää, annetaan oletus
+df["Age"] = df["Age"].fillna(26.0).astype(float)
+
+# =========================================================
+# REQUIRED COLUMNS CHECK
 # =========================================================
 required_player_columns = [
-    "Player", "Team", "Position", "Date of birth", "Games played", "Time on ice",
+    "Player", "Team", "Position", "Games played", "Time on ice",
     "Goals", "First assist", "xG", "Pre-shots passes", "Team xG when on ice",
     "Opponent's xG when on ice", "Puck losses"
 ]
-
 required_team_columns = ["Team", "Games", "xGF", "xGA"]
 
 missing_player = [col for col in required_player_columns if col not in df.columns]
@@ -91,60 +106,14 @@ player_numeric_cols = [
     "Pre-shots passes", "Team xG when on ice", "Opponent's xG when on ice", "Puck losses"
 ]
 for col in player_numeric_cols:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
+    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
 team_numeric_cols = ["Games", "xGF", "xGA"]
 for col in team_numeric_cols:
-    teams_df[col] = pd.to_numeric(teams_df[col], errors="coerce")
+    teams_df[col] = pd.to_numeric(teams_df[col], errors="coerce").fillna(0)
 
 # =========================================================
-# ÄLYKÄS IÄN LASKENTA (Tunnistaa pelkän vuoden tai täyden päivän)
-# =========================================================
-# Muutetaan sarake varmuuden vuoksi tekstiksi käsittelyä varten
-dob_raw = df["Date of birth"].astype(str).str.strip()
-
-def parse_years_safely(val):
-    # Jos kyseessä on pelkkä 4-numeroinen vuosiluku (esim. 1995 tai 2004) tai se päättyy .0
-    # Otetaan vain ensimmäiset 4 numeroa talteen
-    try:
-        clean_val = val.split('.')[0] # poistaa mahdollisen .0 desimaalin
-        if len(clean_val) >= 4 and clean_val[:4].isdigit():
-            year = int(clean_val[:4])
-            if 1960 <= year <= 2015:
-                return year
-    except:
-        pass
-    return None
-
-# Yritetään poimia vuosi ensin suoraan tekstimuodosta
-df["Birth_Year"] = dob_str_extracted = dob_raw.apply(parse_years_safely)
-
-# Jos se oli valmiiksi datetime-objekti, otetaan vuosi sieltä niille jotka jäivät tyhjiksi
-try:
-    parsed_direct = pd.to_datetime(df["Date of birth"], errors="coerce")
-    df["Birth_Year"] = df["Birth_Year"].fillna(parsed_direct.dt.year)
-except:
-    pass
-
-# Lasketaan ikä suoraan vuodesta 2026 käsin (oletetaan keskimääräinen syntymäpäivä vuoden puoliväliin)
-current_year = 2026
-df["Age"] = current_year - df["Birth_Year"]
-
-# Jos jollain riveillä ikää ei saatu (esim. tyhjä solu), annetaan sarjan keskiarvo tai järkevä oletus (26.0)
-mean_age = df["Age"].mean()
-df["Age"] = df["Age"].fillna(mean_age if not np.isnan(mean_age) else 26.0).round(1)
-
-# Siivotaan väliaikaisrakenne pois
-df = df.drop(columns=["Birth_Year"])
-
-# =========================================================
-# CLEAN DATA & FILL NaNs
-# =========================================================
-df = df.replace([np.inf, -np.inf], np.nan)
-df[player_numeric_cols] = df[player_numeric_cols].fillna(0)
-
-# =========================================================
-# SIDEBAR FILTERS (Nostettu yläikäraja 45 vuoteen)
+# SIDEBAR FILTERS
 # =========================================================
 st.sidebar.header("Filters")
 
@@ -156,12 +125,14 @@ min_toi = st.sidebar.slider("Minimum TOI", 0, 2000, 300, 10)
 min_games = st.sidebar.slider("Minimum Games", 0, 80, 10)
 
 # =========================================================
-# APPLY FILTERS
+# APPLY FILTERS (Kopioidaan slice omaksi DataFrameksi indeksisotkujen estämiseksi)
 # =========================================================
-df = df[df["Position"] == selected_position]
-df = df[df["Age"] <= selected_age]
-df = df[df["Time on ice"] >= min_toi]
-df = df[df["Games played"] >= min_games]
+df = df[
+    (df["Position"] == selected_position) & 
+    (df["Age"] <= selected_age) & 
+    (df["Time on ice"] >= min_toi) & 
+    (df["Games played"] >= min_games)
+].copy()
 
 if len(df) == 0:
     st.warning("No players found with the current filter criteria.")
@@ -245,8 +216,9 @@ display_df.columns = [
 ]
 
 round_cols = ["Age", "Projection", "Percentile", "Goals/60", "A1/60", "xG/60", "PreShots/60", "Rel xGF", "Rel xGA"]
-display_df[round_cols] = display_df[round_cols].round(2)
+display_df[round_cols] = display_df[round_cols].round(1)
 display_df["TOI"] = display_df["TOI"].round(0).astype(int)
+display_df["Age"] = display_df["Age"].astype(int) # Muutetaan kokonaisluvuksi selkeyden vuoksi
 
 st.dataframe(
     display_df,
