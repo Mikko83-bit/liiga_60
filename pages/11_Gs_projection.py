@@ -41,7 +41,7 @@ df = raw_players.copy()
 teams_df = raw_teams.copy()
 
 # =========================================================
-# CLEAN COLUMN NAMES
+# CLEAN COLUMN NAMES (Alkupuhdistus välimerkeille)
 # =========================================================
 df.columns = (
     df.columns
@@ -58,6 +58,13 @@ teams_df.columns = (
     .str.replace("\n", "", regex=False)
     .str.replace("\r", "", regex=False)
 )
+
+# =========================================================
+# EXCEL OTSIKKOKORJAUS ("th" -> "Date of birth")
+# =========================================================
+# Jos Excelissä sarakeotsikko on nyrjähtänyt muotoon "th", käännetään se koodille ymmärrettäväksi
+if "th" in df.columns and "Date of birth" not in df.columns:
+    df = df.rename(columns={"th": "Date of birth"})
 
 # =========================================================
 # REQUIRED COLUMNS
@@ -117,20 +124,29 @@ for col in team_numeric_cols:
     teams_df[col] = pd.to_numeric(teams_df[col], errors="coerce")
 
 # =========================================================
-# AGE FIX (Lasketaan ikä turvallisesti eristetyssä kentässä)
+# POMMINVARMA AGE FIX
 # =========================================================
-df["Date of birth"] = df["Date of birth"].astype(str).str.strip()
-df["Date of birth_parsed"] = pd.to_datetime(df["Date of birth"], format="%Y-%m-%d", errors="coerce")
+# Parsitaan päivämäärät automaattisella tunnistuksella ilman pakotettua formaattia
+df["Date of birth_parsed"] = pd.to_datetime(df["Date of birth"], errors="coerce")
 
-# Käytetään kiinteää tai dynaamista nykyhetkeä
+# Jos vuodet tunnistettiin väärin (esim. pelkkä vuosiluku muuttui sekunneiksi), korjataan se:
+if df["Date of birth_parsed"].dt.year.min() < 1930:
+    df["Date of birth_parsed"] = pd.to_datetime(
+        df["Date of birth"].astype(str).str.extract(r'(\d{4})')[0], 
+        format="%Y", 
+        errors="coerce"
+    )
+
+# Lasketaan tarkka ikä (Nykyhetki on vuodessa 2026)
 today = pd.Timestamp.today().normalize()
-
-# Lasketaan ikä vain niille, joilla on validi syntymäaika, muutoin asetetaan NaN väliaikaisesti
 df["Age"] = (today - df["Date of birth_parsed"]).dt.days / 365.25
 df["Age"] = df["Age"].round(1)
 
+# Jos datassa on tyhjiä rivejä, annetaan niille oletukseksi 25.0 nollan sijaan
+df["Age"] = df["Age"].fillna(25.0)
+
 # =========================================================
-# CLEAN DATA & FILL NaNs
+# CLEAN DATA & FILL NaNs (Muut muuttujat)
 # =========================================================
 df = df.replace([np.inf, -np.inf], np.nan)
 
@@ -139,12 +155,6 @@ fill_cols = [
     "Pre-shots passes", "Team xG when on ice", "Opponent's xG when on ice", "Puck losses"
 ]
 df[fill_cols] = df[fill_cols].fillna(0)
-
-# Jos ikää ei pystytty laskemaan (NaT/NaN), annetaan sille sarjan keskiarvo nollan sijaan,
-# jotta hakufiltterit (esim. max age 25) eivät herjaa tai pimennä pelaajaa.
-if df["Age"].isnull().sum() > 0:
-    mean_age = df["Age"].mean()
-    df["Age"] = df["Age"].fillna(mean_age if not np.isnan(mean_age) else 25.0)
 
 # =========================================================
 # SIDEBAR FILTERS
@@ -175,7 +185,6 @@ if len(df) == 0:
 # =========================================================
 per60_metrics = ["Goals", "First assist", "xG", "Pre-shots passes", "Puck losses"]
 for metric in per60_metrics:
-    # Suojataan nollalla jakaminen, jos TOI on jostain syystä 0
     df[f"{metric}_per60"] = np.where(df["Time on ice"] > 0, (df[metric] / df["Time on ice"]) * 60, 0)
 
 # =========================================================
