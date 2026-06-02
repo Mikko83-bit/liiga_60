@@ -2,26 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# =========================================================
-# PAGE CONFIG
-# =========================================================
-st.set_page_config(
-    page_title="Projection Model",
-    layout="wide"
-)
-
-# =========================================================
-# TITLE
-# =========================================================
-st.title("Projection Model")
-
-st.markdown("""
-Projection-oriented player model using:
-- Relative production
-- Team-adjusted impact
-- Sustainable offensive metrics
-- Usage-adjusted projection
-""")
+st.set_page_config(page_title="Projection Model", layout="wide")
+st.title("Projection Model (Column-Shift Proof)")
 
 # =========================================================
 # LOAD DATA
@@ -29,196 +11,191 @@ Projection-oriented player model using:
 FILE = "Liiga 2025-2026_skaters_teams.xlsx"
 
 @st.cache_data
-def load_raw_data():
-    # Luetaan molemmat välilehdet
+def load_clean_data():
     p_df = pd.read_excel(FILE, sheet_name=0)
     t_df = pd.read_excel(FILE, sheet_name=1)
     return p_df, t_df
 
-raw_players, raw_teams = load_raw_data()
+raw_players, raw_teams = load_clean_data()
 df = raw_players.copy()
 teams_df = raw_teams.copy()
 
 # =========================================================
-# CLEAN COLUMN NAMES
+# ÄLYKÄS SARAKKEIDEN METSÄSTYS SISÄLLÖN PERUSTEELLA
 # =========================================================
-df.columns = (
-    df.columns
-    .astype(str)
-    .str.strip()
-    .str.replace("\n", "", regex=False)
-    .str.replace("\r", "", regex=False)
+st.subheader("⚙️ Automaattinen sarakkeiden täsmäytys")
+
+# 1. Etsitään syntymäaika (etsitään sarake, jossa on vähintään yksi nelinumeroinen vuosiluku tai bday-muoto)
+dob_col = None
+for col in df.columns:
+    col_str = df[col].astype(str)
+    # Jos solussa on viiva ja 4 numeroa (esim 1995-08-28) tai pisteitä
+    if col_str.str.contains(r'\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4}').any():
+        dob_col = col
+        break
+
+# Varajärjestelmä nimen perusteella jos sisältöhaku pettää
+if not dob_col:
+    for name in ["date of birth", "dob", "syntymäaika", "syntynyt", "th"]:
+        found = [c for c in df.columns if name.lower() in str(c).lower()]
+        if found:
+            dob_col = found[0]
+            break
+
+# 2. Etsitään pelipaikka (sarake, jossa on arvoja 'D', 'F', 'H', 'P')
+pos_col = None
+for col in df.columns:
+    unique_vals = set(df[col].dropna().astype(str).unique())
+    if any(p in unique_vals for p in ['D', 'F', 'D/F']):
+        pos_col = col
+        break
+if not pos_col:
+    pos_col = "Position" if "Position" in df.columns else df.columns[4]
+
+# 3. Etsitään pelaajan nimi ja joukkue
+player_col = [c for c in df.columns if "player" in str(c).lower()]
+player_col = player_col[0] if player_col else df.columns[1]
+
+team_col = [c for c in df.columns if "team" in str(c).lower()]
+team_col = team_col[0] if team_col else df.columns[2]
+
+st.write(f"• Pelaajasarake: `{player_col}`")
+st.write(f"• Joukkuesarake: `{team_col}`")
+st.write(f"• Pelipaikkasarake: `{pos_col}`")
+st.write(f"• Syntymäaikasarake: `{dob_col}`")
+
+# =========================================================
+# IÄN LASKENTA LUOTETTAVASTI
+# =========================================================
+if dob_col:
+    parsed_dates = pd.to_datetime(df[dob_col], errors="coerce")
+    df["Calculated_Age"] = 2026 - parsed_dates.dt.year
+    
+    # Backup haku tekstistä jos muunnos epäonnistui
+    backup_years = pd.to_numeric(df[dob_col].astype(str).str.extract(r'(\d{4})')[0], errors="coerce")
+    df["Calculated_Age"] = df["Calculated_Age"].fillna(2026 - backup_years)
+else:
+    df["Calculated_Age"] = 25
+
+# Pakotetaan järkevät rajat (jos siirtymä otti pelinumeron tai xG:n, korjataan oletukseksi 25)
+df["Calculated_Age"] = df["Calculated_Age"].fillna(25)
+df["Calculated_Age"] = np.where((df["Calculated_Age"] < 15) | (df["Calculated_Age"] > 48), 25, df["Calculated_Age"])
+df["Calculated_Age"] = df["Calculated_Age"].astype(int)
+
+# =========================================================
+# VIRTUAALINEN NIMIEN KORJAUS LASKENTOJA VARTEN
+# =========================================================
+# Mapataan kriittiset sarakkeet koodin ymmärtämille nimille
+rename_dict = {
+    player_col: "Player",
+    team_col: "Team",
+    pos_col: "Position"
+}
+df = df.rename(columns=rename_dict)
+
+# Varmistetaan muiden numeeristen sarakkeiden haku nimen perusteella
+def find_numeric_col(df, standard_name, default_idx):
+    found = [c for c in df.columns if standard_name.lower() in str(c).lower()]
+    return found[0] if found else df.columns[default_idx]
+
+games_col = find_numeric_col(df, "Games played", 5)
+toi_col = find_numeric_col(df, "Time on ice", 6)
+goals_col = find_numeric_col(df, "Goals", 7)
+assist_col = find_numeric_col(df, "First assist", 9)
+xg_col = find_numeric_col(df, "xG", 13)
+preshot_col = find_numeric_col(df, "Pre-shots passes", 20)
+puckloss_col = find_numeric_col(df, "Puck losses", 25)
+
+# Muutetaan tyypit numeerisiksi turvallisesti
+df["GP_clean"] = pd.to_numeric(df[games_col], errors="coerce").fillna(0)
+df["TOI_clean"] = pd.to_numeric(df[toi_col], errors="coerce").fillna(0)
+df["Goals_clean"] = pd.to_numeric(df[goals_col], errors="coerce").fillna(0)
+df["A1_clean"] = pd.to_numeric(df[assist_col], errors="coerce").fillna(0)
+df["xG_clean"] = pd.to_numeric(df[xg_col], errors="coerce").fillna(0)
+df["PreShot_clean"] = pd.to_numeric(df[preshot_col], errors="coerce").fillna(0)
+df["PuckLoss_clean"] = pd.to_numeric(df[puckloss_col], errors="coerce").fillna(0)
+
+# =========================================================
+# LEAGUE AVERAGES & DELTAS
+# =========================================================
+df["Goals_per60"] = np.where(df["TOI_clean"] > 0, (df["Goals_clean"] / df["TOI_clean"]) * 60, 0)
+df["A1_per60"] = np.where(df["TOI_clean"] > 0, (df["A1_clean"] / df["TOI_clean"]) * 60, 0)
+df["xG_per60"] = np.where(df["TOI_clean"] > 0, (df["xG_clean"] / df["TOI_clean"]) * 60, 0)
+df["PreShot_per60"] = np.where(df["TOI_clean"] > 0, (df["PreShot_clean"] / df["TOI_clean"]) * 60, 0)
+df["PuckLoss_per60"] = np.where(df["TOI_clean"] > 0, (df["PuckLoss_clean"] / df["TOI_clean"]) * 60, 0)
+
+# Deltojen laskenta koko liigasta
+df["dGoals"] = df["Goals_per60"] - df["Goals_per60"].mean()
+df["dA1"] = df["A1_per60"] - df["A1_per60"].mean()
+df["dxG"] = df["xG_per60"] - df["xG_per60"].mean()
+df["dPreShots"] = df["PreShot_per60"] - df["PreShot_per60"].mean()
+df["dPuckLoss"] = df["PuckLoss_per60"].mean() - df["PuckLoss_per60"]
+
+# Puhdas ja vakaa kaava ilman siirtyviä joukkuetietoja
+df["Projection Score"] = (
+    (0.25 * df["dGoals"]) + (0.30 * df["dA1"]) + (0.25 * df["dxG"]) + 
+    (0.15 * df["dPreShots"]) + (0.05 * df["dPuckLoss"])
 )
 
-teams_df.columns = (
-    teams_df.columns
-    .astype(str)
-    .str.strip()
-    .str.replace("\n", "", regex=False)
-    .str.replace("\r", "", regex=False)
-)
+# Painotetaan peliajan mukaan
+league_avg_toi = df["TOI_clean"].mean()
+df["TOI Factor"] = np.where(league_avg_toi > 0, np.sqrt(df["TOI_clean"] / league_avg_toi), 1.0)
+df["Projection Score"] = df["Projection Score"] * df["TOI Factor"]
 
-# Otsikkokorjaus jos sarake on jäänyt "th"-nimelle Excelissä
-if "th" in df.columns and "Date of birth" not in df.columns:
-    df = df.rename(columns={"th": "Date of birth"})
-
-# =========================================================
-# 1. IÄN LASKENTA (Tehdään heti alussa puhtaasti ennen filttereitä)
-# =========================================================
-parsed_dates = pd.to_datetime(df["Date of birth"], errors="coerce")
-df["Age"] = 2026 - parsed_dates.dt.year
-
-# Varajärjestelmä jos jokin rivi lukuuntui tekstinä
-backup_years = pd.to_numeric(df["Date of birth"].astype(str).str.extract(r'(\d{4})')[0], errors="coerce")
-df["Age"] = df["Age"].fillna(2026 - backup_years)
-
-# Jos syntymäaika puuttuu kokonaan, asetetaan liigan keskiarvo-oletus (25)
-df["Age"] = df["Age"].fillna(25).astype(int)
-
-# Varmistussuoja: Jos ikä on epärealistinen (esim. luettu väärästä sarakkeesta), pakotetaan oletukseksi 25
-df["Age"] = np.where((df["Age"] < 15) | (df["Age"] > 48), 25, df["Age"])
-
-# =========================================================
-# REQUIRED COLUMNS CHECK
-# =========================================================
-required_player_columns = [
-    "Player", "Team", "Position", "Games played", "Time on ice",
-    "Goals", "First assist", "xG", "Pre-shots passes", "Team xG when on ice",
-    "Opponent's xG when on ice", "Puck losses"
-]
-required_team_columns = ["Team", "Games", "xGF", "xGA"]
-
-missing_player = [col for col in required_player_columns if col not in df.columns]
-missing_team = [col for col in required_team_columns if col not in teams_df.columns]
-
-if len(missing_player) > 0:
-    st.error(f"Missing player columns from Excel: {missing_player}")
-    st.stop()
-
-if len(missing_team) > 0:
-    st.error(f"Missing team columns from Excel: {missing_team}")
-    st.stop()
-
-# =========================================================
-# NUMERIC CONVERSION & CLEANING (Täytetään tyhjät nollilla turvallisesti)
-# =========================================================
-player_numeric_cols = [
-    "Games played", "Time on ice", "Goals", "First assist", "xG",
-    "Pre-shots passes", "Team xG when on ice", "Opponent's xG when on ice", "Puck losses"
-]
-for col in player_numeric_cols:
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
-team_numeric_cols = ["Games", "xGF", "xGA"]
-for col in team_numeric_cols:
-    teams_df[col] = pd.to_numeric(teams_df[col], errors="coerce").fillna(0)
-
-# =========================================================
-# JOUKKUETILASTOJEN KESKIARVOT JA MÄTSÄYS
-# =========================================================
-teams_df["xGF_per_game"] = np.where(teams_df["Games"] > 0, teams_df["xGF"] / teams_df["Games"], 0)
-teams_df["xGA_per_game"] = np.where(teams_df["Games"] > 0, teams_df["xGA"] / teams_df["Games"], 0)
-
-team_xgf_map = dict(zip(teams_df["Team"], teams_df["xGF_per_game"]))
-team_xga_map = dict(zip(teams_df["Team"], teams_df["xGA_per_game"]))
-
-# =========================================================
-# METRIKAT PER 60 & LEAGUE AVERAGES (Lasketaan KOKO liigadatasta ennen filtteröintiä)
-# =========================================================
-per60_metrics = ["Goals", "First assist", "xG", "Pre-shots passes", "Puck losses"]
-for metric in per60_metrics:
-    df[f"{metric}_per60"] = np.where(df["Time on ice"] > 0, (df[metric] / df["Time on ice"]) * 60, 0)
-
-league_avg = {}
-for metric in per60_metrics:
-    league_avg[f"{metric}_per60"] = df[f"{metric}_per60"].mean()
-
-# Lasketaan erotukset (Deltat) suhteessa koko liigaan
-df["dGoals"] = df["Goals_per60"] - league_avg["Goals_per60"]
-df["dA1"] = df["First assist_per60"] - league_avg["First assist_per60"]
-df["dxG"] = df["xG_per60"] - league_avg["xG_per60"]
-df["dPreShots"] = df["Pre-shots passes_per60"] - league_avg["Pre-shots passes_per60"]
-df["dPuckLoss"] = league_avg["Puck losses_per60"] - df["Puck losses_per60"]
-
-# Suhteellinen joukkue-efekti (Mätsätään kartaston kautta, jotta indeksit eivät sotkeudu)
-df["Rel xGF"] = df["Team xG when on ice"] - df["Team"].map(team_xgf_map).fillna(0)
-df["Rel xGA"] = df["Team"].map(team_xga_map).fillna(0) - df["Opponent's xG when on ice"]
-
-# =========================================================
-# PROJECTION SCORE & TOI WEIGHT
-# =========================================================
-df["Projection Raw"] = (
-    (0.22 * df["dGoals"])
-    + (0.28 * df["dA1"])
-    + (0.22 * df["dxG"])
-    + (0.18 * df["dPreShots"])
-    + (0.12 * df["Rel xGF"])
-    + (0.12 * df["Rel xGA"])
-    + (0.06 * df["dPuckLoss"])
-)
-
-league_avg_toi = df["Time on ice"].mean()
-df["TOI Factor"] = np.where(league_avg_toi > 0, np.sqrt(df["Time on ice"] / league_avg_toi), 1.0)
-df["Projection Score"] = df["Projection Raw"] * df["TOI Factor"]
-
-# Lasketaan prosenttipisteet ja arvosanat (4-10) globaalisti
+# Prosenttipisteet ja arvosanat globaalisti
 df["Percentile"] = df["Projection Score"].rank(pct=True) * 100
 df["Grade"] = (4 + (df["Percentile"] / 100) * 6).round(1)
 
 # =========================================================
-# SIDEBAR FILTERS (Käytetään vasta nyt, kun kaikki laskelmat ovat valmiina)
+# SIDEBAR FILTERS
 # =========================================================
-st.sidebar.header("Filters")
+st.sidebar.header("Suodattimet")
 
-positions = sorted(df["Position"].dropna().unique())
-selected_position = st.sidebar.selectbox("Position", positions, index=0)
+if "Position" in df.columns:
+    pos_list = sorted(df["Position"].dropna().unique())
+    selected_pos = st.sidebar.selectbox("Pelipaikka", pos_list, index=0)
+    filtered_df = df[df["Position"] == selected_pos].copy()
+else:
+    filtered_df = df.copy()
 
-selected_age = st.sidebar.slider("Maximum Age", 16, 45, 45)
-min_toi = st.sidebar.slider("Minimum TOI", 0, 2000, 300, 10)
-min_games = st.sidebar.slider("Minimum Games", 0, 80, 10)
+selected_age = st.sidebar.slider("Maksimi-ikä", 16, 45, 45)
+min_toi = st.sidebar.slider("Minuutti-raja (TOI)", 0, 2000, 300, 10)
 
-# Luodaan suodatettu kopio visualisointia varten
-filtered_df = df[
-    (df["Position"] == selected_position) & 
-    (df["Age"] <= selected_age) & 
-    (df["Time on ice"] >= min_toi) & 
-    (df["Games played"] >= min_games)
+filtered_df = filtered_df[
+    (filtered_df["Calculated_Age"] <= selected_age) & 
+    (filtered_df["TOI_clean"] >= min_toi)
 ].copy()
 
-if len(filtered_df) == 0:
-    st.warning("No players found with the current filter criteria.")
-    st.stop()
-
-# Järjestetään ja luodaan lopullinen sijoitus (Rank)
+# Järjestys
 filtered_df = filtered_df.sort_values("Projection Score", ascending=False).reset_index(drop=True)
 filtered_df["Rank"] = filtered_df.index + 1
 
 # =========================================================
 # DISPLAY RANKINGS
 # =========================================================
-st.markdown("## Projection Rankings")
+st.markdown("## Lopulliset Tulokset")
 
-show_cols = [
-    "Rank", "Player", "Team", "Age", "Games played", "Time on ice", "Grade",
-    "Projection Score", "Percentile", "Goals_per60", "First assist_per60",
-    "xG_per60", "Pre-shots passes_per60", "Rel xGF", "Rel xGA"
-]
+display_cols = {
+    "Rank": "Rank",
+    "Player": "Pelaaja",
+    "Team": "Joukkue",
+    "Calculated_Age": "Ikä",
+    "GP_clean": "GP",
+    "TOI_clean": "TOI",
+    "Grade": "Arvosana",
+    "Projection Score": "Pisteet",
+    "Goals_per60": "G/60",
+    "A1_per60": "A1/60",
+    "xG_per60": "xG/60"
+}
 
-display_df = filtered_df[show_cols].copy()
-display_df.columns = [
-    "Rank", "Player", "Team", "Age", "GP", "TOI", "Grade", "Projection",
-    "Percentile", "Goals/60", "A1/60", "xG/60", "PreShots/60", "Rel xGF", "Rel xGA"
-]
+out_df = filtered_df[list(display_cols.keys())].copy()
+out_df.columns = list(display_cols.values())
 
-# Pyöristykset ulkoasua varten
-round_cols = ["Projection", "Percentile", "Goals/60", "A1/60", "xG/60", "PreShots/60", "Rel xGF", "Rel xGA"]
-display_df[round_cols] = display_df[round_cols].round(1)
-display_df["TOI"] = display_df["TOI"].round(0).astype(int)
-display_df["Age"] = display_df["Age"].astype(int)
+# Pyöristykset siistiä ulkoasua varten
+round_targets = ["Pisteet", "G/60", "A1/60", "xG/60"]
+out_df[round_targets] = out_df[round_targets].round(2)
+out_df["TOI"] = out_df["TOI"].round(0).astype(int)
+out_df["Ikä"] = out_df["Ikä"].astype(int)
 
-st.dataframe(
-    display_df,
-    use_container_width=True,
-    height=800,
-    hide_index=True
-)
+st.dataframe(out_df, use_container_width=True, height=600, hide_index=True)
