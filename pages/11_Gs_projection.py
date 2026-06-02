@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 
 # =========================================================
 # PAGE CONFIG
@@ -62,20 +63,42 @@ if "th" in df.columns and "Date of birth" not in df.columns:
     df = df.rename(columns={"th": "Date of birth"})
 
 # =========================================================
-# VALUVALMIS IÄN LASKENTA (Tehdään ENNEN mitään muuta operaatiota)
+# AGGRESSIIVINEN REGEX-IÄN LASKENTA (Ei luoteta Pandasin datetimeen)
 # =========================================================
-# Muutetaan sarakkeen arvot pd.to_datetime -muotoon, pakotetaan virheet NaT:ksi
-parsed_dates = pd.to_datetime(df["Date of birth"], errors="coerce")
+def force_extract_year_and_calculate_age(val):
+    if pd.isna(val):
+        return 26  # Oletusikä tyhjille
+        
+    # Jos kyseessä on jo valmis datetime-olio Pythonissa, napataan vuosi suoraan
+    if hasattr(val, 'year'):
+        y = val.year
+        if 1960 <= y <= 2015:
+            return 2026 - y
 
-# Lasketaan ikä suoraan vuodesta 2026 käsin perustuen syntymävuoteen
-df["Age"] = 2026 - parsed_dates.dt.year
+    # Muutetaan tekstiksi ja etsitään KAIKKI 4-numeroiset luvut, jotka alkavat 19 tai 20
+    val_str = str(val).strip()
+    years = re.findall(r'\b(19\d{2}|20[0-1]\d)\b', val_str)
+    
+    if years:
+        # Otetaan ensimmäinen järkevä vuosiluku matkaan
+        found_year = int(years[0])
+        return 2026 - found_year
+        
+    # Jos kyseessä on Excelin sarjanumero (esim. 38000+), muutetaan se vuodeksi
+    try:
+        float_val = float(val)
+        if 30000 <= float_val <= 50000:
+            # Excel-aikaleiman muunnos vuodeksi suoraviivaisesti
+            calculated_year = 1900 + int(float_val / 365.25)
+            if 1960 <= calculated_year <= 2015:
+                return 2026 - calculated_year
+    except:
+        pass
 
-# Sateenvarjomekanismi: jos jokin rivi epäonnistui, poimitaan vuosi tekstistä stringinä
-backup_years = pd.to_numeric(df["Date of birth"].astype(str).str.extract(r'^(\d{4})')[0], errors="coerce")
-df["Age"] = df["Age"].fillna(2026 - backup_years)
+    return 26  # Varajärjestelmä hätätilanteeseen
 
-# Jos vieläkään ei löydy ikää, annetaan oletus
-df["Age"] = df["Age"].fillna(26.0).astype(float)
+# Ajetaan haku jokaiselle riville erikseen
+df["Age"] = df["Date of birth"].apply(force_extract_year_and_calculate_age).astype(int)
 
 # =========================================================
 # REQUIRED COLUMNS CHECK
@@ -125,7 +148,7 @@ min_toi = st.sidebar.slider("Minimum TOI", 0, 2000, 300, 10)
 min_games = st.sidebar.slider("Minimum Games", 0, 80, 10)
 
 # =========================================================
-# APPLY FILTERS (Kopioidaan slice omaksi DataFrameksi indeksisotkujen estämiseksi)
+# APPLY FILTERS
 # =========================================================
 df = df[
     (df["Position"] == selected_position) & 
@@ -215,10 +238,10 @@ display_df.columns = [
     "Percentile", "Goals/60", "A1/60", "xG/60", "PreShots/60", "Rel xGF", "Rel xGA"
 ]
 
-round_cols = ["Age", "Projection", "Percentile", "Goals/60", "A1/60", "xG/60", "PreShots/60", "Rel xGF", "Rel xGA"]
+round_cols = ["Projection", "Percentile", "Goals/60", "A1/60", "xG/60", "PreShots/60", "Rel xGF", "Rel xGA"]
 display_df[round_cols] = display_df[round_cols].round(1)
 display_df["TOI"] = display_df["TOI"].round(0).astype(int)
-display_df["Age"] = display_df["Age"].astype(int) # Muutetaan kokonaisluvuksi selkeyden vuoksi
+display_df["Age"] = display_df["Age"].astype(int)
 
 st.dataframe(
     display_df,
